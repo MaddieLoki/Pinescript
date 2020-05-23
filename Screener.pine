@@ -1,0 +1,144 @@
+//@version=4
+study("[HC] MA Screener", shorttitle="MA Screener", overlay=false, scale=scale.right)
+
+//* Inputs - START *//
+src    = input(close, "Source", input.source)
+off    = input(15, "Panel Position Offset",  input.integer, minval=0)
+dec    = input(2, "Decimals", input.integer, minval=0 , maxval = 10)
+tPeriod = input("60", title="Ticker Time Frame")
+tickerID1 = input("Binance:LINKUSDT", title="TickerID1")
+tickerID2 = input("Binance:ENJUSDT", title="TickerID2")
+tickerID3 = input("Binance:BNBUSDT", title="TickerID3")
+tickerID4 = input("Binance:ETHUSDT", title="TickerID4")
+tickerID5 = input("Binance:BTCUSDT", title="TickerID5")
+tickerID6 = input("Bybit:BTCUSD", title="TickerID6")
+tickerID7 = input("Bitmex:XBTUSD", title="TickerID7")
+tickerID8 = input("Bitstamp:XBTUSD", title="TickerID8")
+//* Inputs - END *//
+
+//* Information Panel - START *//
+//Round Function
+Round(src, digits) => 
+    p = pow(10,digits)
+    round(abs(src)*p)/p*sign(src)
+
+//Offset 
+xp(offset) => 
+    time + round(change(time) * offset)
+
+lable1(offset,P,_Text, _txtColor) =>
+    label Screener_Label1 = na
+    Screener_Label1 := label.new(xp(offset), P, text=_Text, color=color.new(#000000, 45), textcolor=_txtColor, style=label.style_label_center, xloc=xloc.bar_time,size=size.small)
+    label.delete(Screener_Label1[1])
+    
+//* Information Panel - END *//
+    
+//* Execute Ticker BTCUSDT - START *//
+rsi14_1 = security(tickerID1, tPeriod, rsi(close, 14))
+ma13_1 = security(tickerID1, tPeriod, ema(close, 13))
+ma21_1 = security(tickerID1, tPeriod, ema(close, 21))
+ma55_1 = security(tickerID1, tPeriod, ema(close, 55))
+ma200_1 = security(tickerID1, tPeriod, ema(close, 200))
+longTrigger1 = false
+longTrigger1 := ma55_1 >= ma200_1 and ma13_1 > ma21_1 and ma21_1 > ma55_1
+shortTrigger1 = false
+shortTrigger1 := ma55_1 < ma200_1 and ma13_1 < ma21_1 and ma21_1 < ma55_1
+tickerColor1 = longTrigger1 ? color.lime : shortTrigger1 ? color.red : color.white
+
+rsi14_2 = security(tickerID2, tPeriod, rsi(close, 14))
+ma13_2 = security(tickerID2, tPeriod, ema(close, 13))
+ma21_2 = security(tickerID2, tPeriod, ema(close, 21))
+ma55_2 = security(tickerID2, tPeriod, ema(close, 55))
+ma200_2 = security(tickerID2, tPeriod, ema(close, 200))
+longTrigger2 = false
+longTrigger2 := ma55_2 >= ma200_2 and ma13_2 > ma21_2 and ma21_2 > ma55_2 
+shortTrigger2 = false
+shortTrigger2 := ma55_2 < ma200_2 and ma13_2 < ma21_2 and ma21_2 < ma55_2 
+tickerColor2 = longTrigger2 ? color.lime : shortTrigger2 ? color.red : color.white
+
+rsi14_3 = security(tickerID3, tPeriod, rsi(close, 14))
+ma13_3 = security(tickerID3, tPeriod, ema(close, 13))
+ma21_3 = security(tickerID3, tPeriod, ema(close, 21))
+ma55_3 = security(tickerID3, tPeriod, ema(close, 55))
+ma200_3 = security(tickerID3, tPeriod, ema(close, 200))
+longTrigger3 = false
+longTrigger3 := ma55_3 >= ma200_3 and ma13_3 > ma21_3 and ma21_3 > ma55_3 
+shortTrigger3 = false
+shortTrigger3 := ma55_3 < ma200_3 and ma13_3 < ma21_3 and ma21_3 < ma55_3 
+tickerColor3 = longTrigger3 ? color.lime : shortTrigger3 ? color.red : color.white
+
+rsi14_4 = security(tickerID4, tPeriod, rsi(close, 14))
+ma13_4 = security(tickerID4, tPeriod, ema(close, 13))
+ma21_4 = security(tickerID4, tPeriod, ema(close, 21))
+ma55_4 = security(tickerID4, tPeriod, ema(close, 55))
+ma200_4 = security(tickerID4, tPeriod, ema(close, 200))
+longTrigger4 = false
+longTrigger4 := ma55_4 >= ma200_4 and ma13_4 > ma21_4 and ma21_4 > ma55_4 
+shortTrigger4 = false
+shortTrigger4 := ma55_4 < ma200_4 and ma13_4 < ma21_4 and ma21_4 < ma55_4 
+tickerColor4 = longTrigger4 ? color.lime : shortTrigger4 ? color.red : color.white
+
+rsi14_5 = security(tickerID5, tPeriod, rsi(close, 14))
+ma13_5 = security(tickerID5, tPeriod, ema(close, 13))
+ma21_5 = security(tickerID5, tPeriod, ema(close, 21))
+ma55_5 = security(tickerID5, tPeriod, ema(close, 55))
+ma200_5 = security(tickerID5, tPeriod, ema(close, 200))
+longTrigger5 = false
+longTrigger5 := ma55_5 >= ma200_5 and ma13_5 > ma21_5 and ma21_5 > ma55_5
+shortTrigger5 = false
+shortTrigger5 := ma55_5 < ma200_5 and ma13_5 < ma21_5 and ma21_5 < ma55_5 
+tickerColor5 = longTrigger5 ? color.lime : shortTrigger5 ? color.red : color.white
+
+rsi14_6 = security(tickerID6, tPeriod, rsi(close, 14))
+ma13_6 = security(tickerID6, tPeriod, ema(close, 13))
+ma21_6 = security(tickerID6, tPeriod, ema(close, 21))
+ma55_6 = security(tickerID6, tPeriod, ema(close, 55))
+ma200_6 = security(tickerID6, tPeriod, ema(close, 200))
+longTrigger6 = false
+longTrigger6 := ma55_6 >= ma200_6 and ma13_6 > ma21_6 and ma21_6 > ma55_6
+shortTrigger6 = false
+shortTrigger6 := ma55_6 < ma200_6 and ma13_6 < ma21_6 and ma21_6 < ma55_6 
+tickerColor6 = longTrigger6 ? color.lime : shortTrigger6 ? color.red : color.white
+
+rsi14_7 = security(tickerID7, tPeriod, rsi(close, 14))
+ma13_7 = security(tickerID7, tPeriod, ema(close, 13))
+ma21_7 = security(tickerID7, tPeriod, ema(close, 21))
+ma55_7 = security(tickerID7, tPeriod, ema(close, 55))
+ma200_7 = security(tickerID7, tPeriod, ema(close, 200))
+longTrigger7 = false
+longTrigger7 := ma55_7 >= ma200_7 and ma13_7 > ma21_7 and ma21_7 > ma55_7
+shortTrigger7 = false
+shortTrigger7 := ma55_7 < ma200_7 and ma13_7 < ma21_7 and ma21_7 < ma55_7 
+tickerColor7 = longTrigger7 ? color.lime : shortTrigger7 ? color.red : color.white
+
+labelMSG1 = longTrigger1 ? "LONG -> (" + tickerID1 + ")" : shortTrigger1 ? "SHORT -> (" + tickerID1 + ")" : "Neutral -> (" + tickerID1 + ")"
+labelMSG2 = longTrigger2 ? "LONG -> (" + tickerID2 + ")" : shortTrigger2 ? "SHORT -> (" + tickerID2 + ")" : "Neutral -> (" + tickerID2 + ")"
+labelMSG3 = longTrigger3 ? "LONG -> (" + tickerID3 + ")" : shortTrigger3 ? "SHORT -> (" + tickerID3 + ")" : "Neutral -> (" + tickerID3 + ")"
+labelMSG4 = longTrigger4 ? "LONG -> (" + tickerID4 + ")" : shortTrigger4 ? "SHORT -> (" + tickerID4 + ")" : "Neutral -> (" + tickerID4 + ")"
+labelMSG5 = longTrigger5 ? "LONG -> (" + tickerID5 + ")" : shortTrigger5 ? "SHORT -> (" + tickerID5 + ")" : "Neutral -> (" + tickerID5 + ")"
+labelMSG6 = longTrigger6 ? "LONG -> (" + tickerID6 + ")" : shortTrigger6 ? "SHORT -> (" + tickerID6 + ")" : "Neutral -> (" + tickerID6 + ")"
+labelMSG7 = longTrigger7 ? "LONG -> (" + tickerID7 + ")" : shortTrigger7 ? "SHORT -> (" + tickerID7 + ")" : "Neutral -> (" + tickerID7 + ")"
+//labelMSG8 = longTrigger8 ? "LONG -> (" + tickerID8 + ")" : shortTrigger8 ? "SHORT -> (" + tickerID8 + ")" : "Neutral -> (" + tickerID8 + ")"
+
+hline(0, title="bottom", color=color.gray, linestyle=hline.style_dotted, linewidth=1)
+lable1(off, 0.1, labelMSG1, tickerColor1)
+lable1(off, 0.2, labelMSG2, tickerColor2)
+lable1(off, 0.3, labelMSG3, tickerColor3)
+lable1(off, 0.4, labelMSG4, tickerColor4)
+lable1(off, 0.5, labelMSG5, tickerColor5)
+lable1(off, 0.6, labelMSG6, tickerColor6)
+lable1(off, 0.7, labelMSG7, tickerColor7)
+//lable1(off, 0.8, labelMSG8, tickerColor8)
+hline(0.8, title="top", color=color.gray, linestyle=hline.style_dotted, linewidth=1) 
+
+plotchar(0.1, char="█", color=shortTrigger1 ? color.red : longTrigger1 ? color.lime : na, transp=25, location=location.absolute)
+plotchar(0.2, char="█", color=shortTrigger2 ? color.red : longTrigger2 ? color.lime : na, transp=25, location=location.absolute)
+plotchar(0.3, char="█", color=shortTrigger3 ? color.red : longTrigger3 ? color.lime : na, transp=25, location=location.absolute)
+plotchar(0.4, char="█", color=shortTrigger4 ? color.red : longTrigger4 ? color.lime : na, transp=25, location=location.absolute)
+plotchar(0.5, char="█", color=shortTrigger5 ? color.red : longTrigger5 ? color.lime : na, transp=25, location=location.absolute)
+plotchar(0.6, char="█", color=shortTrigger6 ? color.red : longTrigger6 ? color.lime : na, transp=25, location=location.absolute)
+plotchar(0.7, char="█", color=shortTrigger7 ? color.red : longTrigger7 ? color.lime : na, transp=25, location=location.absolute)
+//plotchar(0.8, char="█", color=shortTrigger8 ? color.red : longTrigger8 ? color.lime : na, transp=25, location=location.absolute)
+//* Execute Ticker BTCUSDT - END *//
+
+
