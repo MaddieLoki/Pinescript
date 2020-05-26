@@ -1,0 +1,20 @@
+//@version=3
+study("DeMarker")
+per=input(title="DeMarker Period",type=integer,defval=13)
+demax=high>high[1] ? high-high[1] : 0   
+demin=low<low[1] ? low[1]-low : 0
+demax_av=sma(demax,per)
+demin_av=sma(demin,per)
+dmark=demax_av/(demax_av+demin_av)
+h1=hline(0.3)
+h2=hline(0.7)
+fill(h1,h2,color=blue)
+
+plotColor = (dmark > 0.7 ? red : dmark < 0.3 ? green : white)
+plot(dmark, color=plotColor, linewidth=2)
+
+dmarkSell = (dmark > 0.7)
+dmarkBuy = (dmark < 0.3)
+
+plotshape(dmarkSell, style = shape.flag, color = lime, location = location.abovebar, text = "D")
+plotshape(dmarkBuy, style = shape.flag, color = red, location = location.belowbar, text = "D") 

@@ -1,0 +1,104 @@
+//@version=3
+study(title="Divergence Indicator")
+
+osc = rsi(close, 14)
+
+// Bullish
+bullishPrice = low
+priceMins = bullishPrice > bullishPrice[1] and bullishPrice[1] < bullishPrice[2]
+
+priceRightMin = valuewhen(priceMins, bullishPrice[1], 0)
+priceLeftMin = valuewhen(priceMins, bullishPrice[1], 1)
+
+oscRightMin = valuewhen(priceMins, osc[1], 0)
+oscLeftMin = valuewhen(priceMins, osc[1], 1)
+
+bullishNDiv = priceLeftMin > priceRightMin and oscLeftMin < oscRightMin
+bullishHDiv = priceLeftMin < priceRightMin and oscLeftMin > oscRightMin
+
+bullishNSig = bullishNDiv and not bullishNDiv[1] and bullishPrice[1] < bullishPrice
+bullishHSig = bullishHDiv and not bullishHDiv[1] and bullishPrice[1] > bullishPrice
+
+plot(bullishNSig ? 1 : 0, title="Normal Bullish Divergence", style=histogram, linewidth=3, color=green)
+plot(bullishHSig ? 1 : 0, title="Hidden Bullish Divergence", style=histogram, linewidth=1, color=green)
+
+// Bearish
+bearishPrice = high
+priceMaxs = bearishPrice < bearishPrice[1] and bearishPrice[1] > bearishPrice[2]
+
+priceRightMax = valuewhen(priceMaxs, bearishPrice[1], 0)
+priceLeftMax = valuewhen(priceMaxs, bearishPrice[1], 1)
+
+oscRightMax = valuewhen(priceMaxs, osc[1], 0)
+oscLeftMax = valuewhen(priceMaxs, osc[1], 1)
+
+bearishNDiv = priceLeftMax < priceRightMax and oscLeftMax > oscRightMax
+bearishHDiv = priceLeftMax > priceRightMax and oscLeftMax < oscRightMax
+
+bearishNSig = bearishNDiv and not bearishNDiv[1] and bearishPrice[1] < bearishPrice
+bearishHSig = bearishHDiv and not bearishHDiv[1] and bearishPrice[1] > bearishPrice
+
+plot(bearishNSig ? 1 : 0, title="Normal Bearish Divergence", style=histogram, linewidth=3, color=red)
+plot(bearishHSig ? 1 : 0, title="Hidden Bearish Divergence", style=histogram, linewidth=1, color=red)
+
+
+==================================
+==================================
+study(title='[RS]Accumulation and Distribution Divergence V0')
+
+smooth = input(1)
+
+f_top_fractal(_src)=>_src[4] < _src[2] and _src[3] < _src[2] and _src[2] > _src[1] and _src[2] > _src[0]
+f_bot_fractal(_src)=>_src[4] > _src[2] and _src[3] > _src[2] and _src[2] < _src[1] and _src[2] < _src[0]
+f_fractalize(_src)=>f_top_fractal(_src) ? 1 : f_bot_fractal(_src) ? -1 : 0
+
+hist = sma(cum(close==high and close==low or high==low ? 0 : ((2*close-low-high)/(high-low))*volume), smooth)
+
+fractal_top = f_fractalize(hist) > 0 ? hist[2] : na
+fractal_bot = f_fractalize(hist) < 0 ? hist[2] : na
+
+high_prev = valuewhen(fractal_top, hist[2], 1) 
+high_price = valuewhen(fractal_top, high[2], 1)
+low_prev = valuewhen(fractal_bot, hist[2], 1) 
+low_price = valuewhen(fractal_bot, low[2], 1)
+
+regular_bearish_div = fractal_top and high[2] > high_price and hist[2] < high_prev
+hidden_bearish_div = fractal_top and high[2] < high_price and hist[2] > high_prev
+regular_bullish_div = fractal_bot and low[2] < low_price and hist[2] > low_prev
+hidden_bullish_div = fractal_bot and low[2] > low_price and hist[2] < low_prev
+
+plot(title='HIST', series=hist, color=black)
+plot(title='H F', series=fractal_top, color=regular_bearish_div or hidden_bearish_div ? black : silver, offset=-2)
+plot(title='L F', series=fractal_bot, color=regular_bullish_div or hidden_bullish_div ? black : silver, offset=-2)
+plot(title='H D', series=fractal_top, style=circles, color=regular_bearish_div or hidden_bearish_div ? maroon : gray, linewidth=3, offset=-2)
+plot(title='L D', series=fractal_bot, style=circles, color=regular_bullish_div or hidden_bullish_div ? green : gray, linewidth=3, offset=-2)
+
+plotshape(title='+RBD', series=regular_bearish_div ? hist[2] : na, text='R', style=shape.labeldown, location=location.absolute, color=maroon, textcolor=white, offset=-2)
+plotshape(title='+HBD', series=hidden_bearish_div ? hist[2] : na, text='H', style=shape.labeldown, location=location.absolute, color=maroon, textcolor=white, offset=-2)
+plotshape(title='-RBD', series=regular_bullish_div ? hist[2] : na, text='R', style=shape.labelup, location=location.absolute, color=green, textcolor=white, offset=-2)
+plotshape(title='-HBD', series=hidden_bullish_div ? hist[2] : na, text='H', style=shape.labelup, location=location.absolute, color=green, textcolor=white, offset=-2)
+
+
+=================================
+=================================
+//@version=2
+study(title="Stefan Krecher: Jeddingen Divergence v2", shorttitle="Jeddingen Divergence", overlay=true)
+candles = input(title="Number of candles that need to diverge", type=integer, defval=5, minval=3, maxval=10)
+linregPrice = input(title="price related linear regression length", type=integer, defval=20, minval=5, maxval=50)
+momLength = input(title="momentum length", type=integer, defval=10, minval=2, maxval=50)
+
+jeddingen(series) => ((falling(series, candles)) and (rising(mom(series, momLength),candles))) or ((rising(series, candles)) and (falling(mom(series, momLength),candles)))
+
+srcDiv = close
+lrDiv = linreg(srcDiv, linregPrice, 0)
+
+lrDivColor =if(jeddingen(lrDiv) == true)
+    rising(lrDiv, candles) ? red:green
+else
+    na
+    
+alertcondition(jeddingen(lrDiv) and rising(lrDiv, candles), title="bearish jeddingen divergence", message="bearish jeddingen divergence")
+alertcondition(jeddingen(lrDiv) and falling(lrDiv, candles), title="bullish jeddingen divergence", message="bullish jeddingen divergence")
+    
+plot(lrDiv)
+plot(lrDiv, color=lrDivColor, linewidth=4)

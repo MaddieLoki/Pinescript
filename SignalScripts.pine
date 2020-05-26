@@ -1,0 +1,222 @@
+// *** DeMarker Calculations ***
+per=input(title="DeMarker Period",type=integer,defval=13)
+demax=high>high[1] ? high-high[1] : 0   
+demin=low<low[1] ? low[1]-low : 0
+demax_av=sma(demax,per)
+demin_av=sma(demin,per)
+dmark=demax_av/(demax_av+demin_av)
+// *** DeMarker Signals ***
+dmarkShort = (dmark >= 0.75)
+dmarkLong = (dmark <= 0.25)
+
+
+// *** MACD Calculations ***
+fastLength = input(12, minval=1), slowLength=input(26,minval=1)
+signalLength=input(9,minval=1)
+fastMA = ema(src, fastLength)
+slowMA = ema(src, slowLength)
+macd = fastMA - slowMA
+signal = sma(macd, signalLength)
+hist = macd - signal
+// *** MACD Signals ***
+MACDLong = macd >= 20
+MACDShort = macd <= -20
+histA_IsUp = hist > hist[1] and hist > 0
+histA_IsDown = hist < hist[1] and hist > 0
+histB_IsDown = hist < hist[1] and hist <= 0
+histB_IsUp = hist > hist[1] and hist <= 0
+
+// *** TTM SQUEEZE ***
+TTMlength = input(title="TTM Length", type=integer, defval=20, minval=0) 
+bband(TTMlength, mult) =>
+	sma(src, TTMlength) + mult * stdev(src, TTMlength)
+keltner(TTMlength, mult) =>
+	ema(src, TTMlength) + mult * ema(tr, TTMlength)
+
+e1 = (highest(high, TTMlength) + lowest(low, TTMlength)) / 2 + sma(close, TTMlength)
+TTMosc = linreg(close - e1 / 2, TTMlength, 0)
+TTMdiffTTM = bband(TTMlength, 2) - keltner(TTMlength, 1)
+//osc_color = TTMosc[1] < TTMosc[0] ? TTMosc[0] >= 0 ? #00ffff : #cc00cc : TTMosc[0] >= 0 ? #009b9b : #ff9bff
+//mid_color = TTMdiff >= 0 ? green : red
+
+// *** Elliott Wave Oscillator Calculations ***
+ewo=ema(src, 5) - ema(src, 35)
+// *** Elliott Wave Oscillator Signals ***
+ewoLong = ewo > 0
+ewoShort = ewo < 0
+ewoLongShort = ewo >= 100 and ewo[1] > ewo
+ewoShortLong = ewo <= -100 and ewo[1] < ewo
+
+
+// *** Pivot Point Calculations ***
+leftBars  = input(7,title="Pivot Left Bars")
+rightBars = input(21,title="Pivot Right Bars")
+swh = pivothigh(leftBars, rightBars)
+swl = pivotlow(leftBars, rightBars)
+swh_cond = not na(swh)
+hprice = 0.0
+hprice := swh_cond ? swh : hprice[1]
+swl_cond = not na(swl)
+lprice = 0.0
+lprice := swl_cond ? swl : lprice[1]
+// Pivot Point Signals
+long  = crossover(high, hprice + syminfo.mintick)
+short = crossunder(low, lprice - syminfo.mintick)
+last_signal = 0
+pivotLong  = long and (nz(last_signal[1]) == 0 or nz(last_signal[1]) == -1)
+pivotShort = short and (nz(last_signal[1]) == 0 or nz(last_signal[1]) == 1)
+last_signal := pivotLong ? 1 : pivotShort ? -1 : last_signal[1]
+// Plotting Pivot: PL=Pivot Long, PS=Pivot Short
+plotshape(pivotLong,  style = shape.triangleup,   color = lime,   location = location.belowbar, text = "\nP\nL")
+plotshape(pivotShort, style = shape.triangledown, color = red,     location = location.abovebar, text = "P\nS\n") 
+
+// *** ADX/DI Calculations ***
+lenADXDI = input(title="ADX Length", type=integer, defval=14)
+ADXDIthreshold = input(title="ADX Threshold", type=integer, defval=20)
+TrueRange = max(max(high-low, abs(high-nz(src[1]))), abs(low-nz(src[1])))
+DirectionalMovementPlus = high-nz(high[1]) > nz(low[1])-low ? max(high-nz(high[1]), 0): 0
+DirectionalMovementMinus = nz(low[1])-low > high-nz(high[1]) ? max(nz(low[1])-low, 0): 0
+SmoothedTrueRange = na
+SmoothedTrueRange := nz(SmoothedTrueRange[1]) - (nz(SmoothedTrueRange[1])/lenADXDI) + TrueRange
+SmoothedDirectionalMovementPlus = na
+SmoothedDirectionalMovementPlus := nz(SmoothedDirectionalMovementPlus[1]) - (nz(SmoothedDirectionalMovementPlus[1])/lenADXDI) + DirectionalMovementPlus
+SmoothedDirectionalMovementMinus = na
+SmoothedDirectionalMovementMinus := nz(SmoothedDirectionalMovementMinus[1]) - (nz(SmoothedDirectionalMovementMinus[1])/lenADXDI) + DirectionalMovementMinus
+DIPlus = SmoothedDirectionalMovementPlus / SmoothedTrueRange * 100
+DIMinus = SmoothedDirectionalMovementMinus / SmoothedTrueRange * 100
+DX = abs(DIPlus-DIMinus) / (DIPlus+DIMinus)*100
+ADX = sma(DX, lenADXDI)
+//** ADX/DI Signals ***
+ADXOverThreshold = ADX > ADXDIthreshold
+ADXTrending = ADX[3] < ADX[2] and ADX[1] < ADX
+ADXLongTrend = DIPlus > DIMinus and ADXTrending
+ADXShortTrend = DIMinus > DIPlus and ADXTrending
+ADXLong = DIPlus <= 13 and DIMinus >= 55
+ADXShort = DIMinus <= 13 and DIPlus >= 55
+ADXLongCross = crossover(DIPlus, DIMinus)
+ADXShortCross = crossover(DIMinus, DIPlus)
+
+
+// *** CCI Coded OBV ***
+cciobvlength = input(20, minval=1, title="CCI Length")
+cciobvthreshold=input(0, title="CCI threshold for OBV coding")
+cciobvlengthema=input(7, title="cciobv EMA length")
+obv(src) => 
+    cum(change(src) > 0 ? volume : change(src) < 0 ? -volume : 0*volume)
+o=obv(src)
+cciobv_c=cci(src, cciobvlength)
+cciobv_ema = ema(o,cciobvlengthema)
+//** CCI Coded OVB Signals ***
+cciobv_Long = cciobv_c > cciobvthreshold
+cciobv_Short = cciobv_c < cciobvthreshold
+cciobv_TrendLong = cciobv_ema[3] < cciobv_ema[2] and cciobv_ema[2] < cciobv_ema[1] and cciobv_ema[1] < cciobv_ema
+cciobv_TrendShort = cciobv_ema[3] > cciobv_ema[2] and cciobv_ema[2] > cciobv_ema[1] and cciobv_ema[1] > cciobv_ema 
+
+
+//*** PFE: Polarized Fractal Efficiency ***
+PFE_Length = input(10)
+PFE_Smoothing = input(5)
+ln = PFE_Length - 1
+diff = close - close[ln]
+pfetmp = 100 * sqrt(pow(diff,2) + pow(PFE_Length,2)) / sum(sqrt(1 + pow(close - close[1],2)), PFE_Length - 1)
+pfe = ema( diff > 0 ? pfetmp : -pfetmp, PFE_Smoothing)
+// *** PFE Signals ***
+pfeCloseLong = pfe > 0 and pfe[1] > pfe
+pfeCloseShort = pfe < 0 and pfe[1] < pfe
+pfeLong = pfe < -68
+pfeShort = pfe > 50
+
+
+// *** VFI: Volume Flow Indicator ***
+vfilength = input(130, title="VFI length")
+coef = input(0.2)
+vcoef = input(2.5, title="Max. vol. cutoff")
+vfiSignalLength=input(5)
+smoothVFI=input(false, type=bool)
+ma(x,y) => smoothVFI ? sma(x,y) : x
+typical=hlc3
+inter = log( typical ) - log( typical[1] )
+vinter = stdev(inter, 30 )
+cutoff = coef * vinter * close
+vave = sma( volume, vfilength )[1]
+vmax = vave * vcoef
+vc = iff(volume < vmax, volume, vmax) //min( volume, vmax )
+mf = typical - typical[1]
+vcp = iff( mf > cutoff, vc, iff ( mf < -cutoff, -vc, 0 ) )
+vfi = ma(sum( vcp , vfilength )/vave, 3)
+vfiema=ema( vfi, vfiSignalLength )
+
+
+=============================================
+
+//@version=3
+//Script snipets & inspiration from Chris Moody
+//Multi RSI Indicator with EMA of RSI for Signal
+//Edited by Henri Cormier
+study(title="[HC] Tripple RSI", shorttitle="[HC] Tripple RSI", overlay=false)
+
+src = close, 
+len2 = input(2, minval=1, title="RSI Length 2")
+len5 = input(5, minval=1, title="RSI Length 5")
+len14 = input(14, minval=1, title="RSI Length 14")
+lenEMA = input(55, minval=1, title="EMA of RSI14")
+rsi2 = rsi(close, len2)
+rsi5 = rsi(close, len5)
+rsi14 = rsi(close, len14)
+emaRSI = ema(rsi14,lenEMA)
+xbars = input(14, "Div lookback period (bars)?", integer, minval=1)
+hb = abs(highestbars(rsi14, xbars)) // Finds bar with highest value in last X bars
+lb = abs(lowestbars(rsi14, xbars)) // Finds bar with lowest value in last X bars
+
+// Plots divergences with offest
+plot(rsi2, title="RSI2", style=line, linewidth=1, color=red, transp=0)
+plot(rsi5, title="RSI5", style=line, linewidth=1, color=lime, transp=0)
+plot(rsi14, title="RSI14", style=line, linewidth=1, color=yellow, transp=0)
+//plot(emaRSI, title="EMA of RSI14", style=line, linewidth=1, color=white, transp=0)
+band1 = hline(70, title="Upper Line", linestyle=dotted, linewidth=1, color=white)
+band0 = hline(30, title="Lower Line", linestyle=dotted, linewidth=1, color=white)
+band80 = hline(80, title="80 Line", linestyle=dotted, linewidth=1, color=red)
+band20 = hline(20, title="20 Line", linestyle=dotted, linewidth=1, color=lime)
+//fill(band1, band0, color=purple, transp=95)
+bgcolor(rsi2 <= 10 ? green : rsi2 >= 90 ? red : black, transp=85)
+bgcolor(rsi5 <= 20 ? green : rsi5 >= 80 ? red : black, transp=75)
+bgcolor(rsi14 <= 30 ? green : rsi14 >= 70 ? red : black, transp=65)
+
+// *** RSI Divergence START ***
+length = input(14)
+
+f_top_fractal(_src)=>_src[4] < _src[2] and _src[3] < _src[2] and _src[2] > _src[1] and _src[2] > _src[0]
+f_bot_fractal(_src)=>_src[4] > _src[2] and _src[3] > _src[2] and _src[2] < _src[1] and _src[2] < _src[0]
+f_fractalize(_src)=>f_top_fractal(_src) ? 1 : f_bot_fractal(_src) ? -1 : 0
+
+rsi_high = rsi(high, length)
+rsi_low = rsi(low, length)
+fractal_top_rsi = f_fractalize(rsi_high) > 0 ? rsi_high[2] : na
+fractal_bot_rsi = f_fractalize(rsi_low) < 0 ? rsi_low[2] : na
+
+rsi_high_prev = valuewhen(fractal_top_rsi, rsi_high[2], 1) 
+rsi_high_price = valuewhen(fractal_top_rsi, high[2], 1)
+rsi_low_prev = valuewhen(fractal_bot_rsi, rsi_low[2], 1) 
+rsi_low_price = valuewhen(fractal_bot_rsi, low[2], 1)
+
+regular_bearish_div = fractal_top_rsi and high[2] > rsi_high_price and rsi_high[2] < rsi_high_prev
+hidden_bearish_div = fractal_top_rsi and high[2] < rsi_high_price and rsi_high[2] > rsi_high_prev
+regular_bullish_div = fractal_bot_rsi and low[2] < rsi_low_price and rsi_low[2] > rsi_low_prev
+hidden_bullish_div = fractal_bot_rsi and low[2] > rsi_low_price and rsi_low[2] < rsi_low_prev
+
+plot(title='RSI High', series=rsi_high, color=gray)
+plot(title='RSI Low', series=rsi_low, color=gray)
+plot(title='RSI H F', series=fractal_top_rsi, color=black, offset=-2)
+plot(title='RSI L F', series=fractal_bot_rsi, color=black, offset=-2)
+plot(title='RSI H D', series=fractal_top_rsi, style=circles, color=regular_bearish_div or hidden_bearish_div ? maroon : gray, linewidth=3, offset=-2)
+plot(title='RSI L D', series=fractal_bot_rsi, style=circles, color=regular_bullish_div or hidden_bullish_div ? green : gray, linewidth=3, offset=-2)
+
+plotshape(title='+RBD', series=regular_bearish_div ? rsi_high[2] : na, text='R', style=shape.labeldown, location=location.absolute, color=maroon, textcolor=white, offset=-2)
+plotshape(title='+HBD', series=hidden_bearish_div ? rsi_high[2] : na, text='H', style=shape.labeldown, location=location.absolute, color=maroon, textcolor=white, offset=-2)
+plotshape(title='-RBD', series=regular_bullish_div ? rsi_low[2] : na, text='R', style=shape.labelup, location=location.absolute, color=green, textcolor=white, offset=-2)
+plotshape(title='-HBD', series=hidden_bullish_div ? rsi_low[2] : na, text='H', style=shape.labelup, location=location.absolute, color=green, textcolor=white, offset=-2)
+// *** RSI Divergence END ***
+
+
+
+

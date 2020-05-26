@@ -1,0 +1,26 @@
+lenADXDI = input(title="ADX Length", type=integer, defval=14)
+ADXDIthreshold = input(title="ADX Threshold", type=integer, defval=20)
+
+TrueRange = max(max(high-low, abs(high-nz(src[1]))), abs(low-nz(src[1])))
+DirectionalMovementPlus = high-nz(high[1]) > nz(low[1])-low ? max(high-nz(high[1]), 0): 0
+DirectionalMovementMinus = nz(low[1])-low > high-nz(high[1]) ? max(nz(low[1])-low, 0): 0
+
+
+SmoothedTrueRange = nz(SmoothedTrueRange[1]) - (nz(SmoothedTrueRange[1])/lenADXDI) + TrueRange
+SmoothedDirectionalMovementPlus = nz(SmoothedDirectionalMovementPlus[1]) - (nz(SmoothedDirectionalMovementPlus[1])/lenADXDI) + DirectionalMovementPlus
+SmoothedDirectionalMovementMinus = nz(SmoothedDirectionalMovementMinus[1]) - (nz(SmoothedDirectionalMovementMinus[1])/lenADXDI) + DirectionalMovementMinus
+
+DIPlus = SmoothedDirectionalMovementPlus / SmoothedTrueRange * 100
+DIMinus = SmoothedDirectionalMovementMinus / SmoothedTrueRange * 100
+DX = abs(DIPlus-DIMinus) / (DIPlus+DIMinus)*100
+ADX = sma(DX, lenADXDI)
+
+// ADX Signals
+ADXTrend = ADX > ADXDIthreshold
+ADXLong = DIPlus > ADXDIthreshold
+ADXShort = DIPlus < DIMinus
+
+plot(DIPlus, color=green, title="DI+")
+plot(DIMinus, color=red, title="DI-")
+plot(ADX, color=yellow, title="ADX")
+hline(th, color=white, linestyle=dashed)

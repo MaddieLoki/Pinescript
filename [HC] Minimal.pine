@@ -1,0 +1,311 @@
+//@version=3
+study("[HC] Study: minimal", overlay=true)
+
+src = close
+
+//*  Triple RSI *//
+len2 = input(2, minval=1, title="RSI Length 2")
+len5 = input(7, minval=1, title="RSI Length 7")
+len14 = input(14, minval=1, title="RSI Length 14")
+rsi2 = rsi(close, len2)
+rsi5 = rsi(close, len5)
+rsi14 = rsi(close, len14)
+xbars = input(14, "Div lookback period (bars)?", integer, minval=1)
+hb = abs(highestbars(rsi14, xbars)) // Finds bar with highest value in last X bars
+lb = abs(lowestbars(rsi14, xbars)) // Finds bar with lowest value in last X bars
+
+//* RSIOBV *//
+cciP = input(20, title="CCI Period Length")
+rsiP = input(20, title="RSI Period Length")
+cciThreshold = input(0, title="CCI threshold for color coding")
+emaLength = input(13, title="EMA Length/RSI_OBV")
+obv = cum(change(src) > 0 ? volume : change(src) < 0 ? -volume : 0*volume)
+c = cci(src, cciP)
+rsiobv = na
+rsiobv := rsi(obv, rsiP)
+
+//* ATR Trailing Stop *//
+showATR = input(title="Show ATR Trailing Stop?", type=bool, defval=false)
+nATRPeriod = input(5)
+nATRMultip = input(3.5)
+xATR = atr(nATRPeriod)
+nLoss = nATRMultip * xATR
+xATRTrailingStop = na
+xATRTrailingStop := iff(close > nz(xATRTrailingStop[1], 0) and close[1] > nz(xATRTrailingStop[1], 0), max(nz(xATRTrailingStop[1]), close - nLoss),
+   iff(close < nz(xATRTrailingStop[1], 0) and close[1] < nz(xATRTrailingStop[1], 0), min(nz(xATRTrailingStop[1]), close + nLoss), 
+   iff(close > nz(xATRTrailingStop[1], 0), close - nLoss, close + nLoss)))
+plot(showATR ? xATRTrailingStop : na, color=fuchsia, style=stepline, title="ATR Trailing Stop")
+
+
+//* Inputs EMA *//
+DisplayEMA = input(true, title="Display SMA")
+ma8 = na
+ma8 := sma(src, 8)
+ma13 = na
+ma13 := sma(src, 13)
+ma21 = na
+ma21 := sma(src, 21)
+ma55 = na
+ma55 := sma(src, 55)
+ma100 = na
+ma100 := sma(src, 100)
+ma200 = na
+ma200 := sma(src, 200)
+vegas12 = na
+vegas12 := sma(src, 12)
+vegas144 = na
+vegas144 := sma(src, 144)
+vegas169 = na
+vegas169 := sma(src, 169)
+
+// Plotting EMA
+//plot( ma8, color=red, transp=0, style=line, title="8", linewidth=1)
+//plot( ma13, color=orange, transp=0, style=line, title="13", linewidth=1)
+plot( ma21, color=yellow, transp=0, style=line, title="21", linewidth=1)
+plot( ma55, color=lime, transp=0, style=line, title="55", linewidth=1)
+//plot( ma100, color=aqua, transp=0, style=line, title="100", linewidth=1)
+plot( ma200, color=white, transp=0, style=line, title="200", linewidth=1)
+plot( vegas12, color=red, transp=0, style=line, title="vegas12", linewidth=1)
+plot( vegas144, color=orange, transp=0, style=line, title="vegas144", linewidth=1)
+//plot( vegas169, color=maroon, transp=0, style=line, title="vegas169", linewidth=1)
+
+// *** DeMarker Calculations ***
+showDemarkBG = input(title="Show Demark Background Notification?", type=bool, defval=true)
+dPeriod = input(title="DeMarker Period", type=integer, defval=13)
+dHigh = input(title="DeMarker High Level", type=float, defval=0.9)
+dLow = input(title="DeMarker Low Level", type=float, defval=0.1)
+demax = high>high[1] ? high-high[1] : 0   
+demin = low<low[1] ? low[1]-low : 0
+demax_av = sma(demax,dPeriod)
+demin_av = sma(demin,dPeriod)
+dmark = demax_av/(demax_av+demin_av)
+dmarkShort = (dmark >= dHigh)
+dmarkLong = (dmark <= dLow)
+bgcolor(showDemarkBG ? dmarkShort ? red : na : na)
+bgcolor(showDemarkBG ? dmarkLong ? lime : na : na)
+
+// *** MACD Calculations ***
+fastLength = input(title="MACD Fast Length", defval=12, minval=1)
+slowLength=input(title="MACD Slow Length", defval=26,minval=1)
+signalLength=input(title="MACD Signal Length", defval=9,minval=1)
+fastMA = ema(src, fastLength)
+slowMA = ema(src, slowLength)
+macd = fastMA - slowMA
+signal = sma(macd, signalLength)
+hist = macd - signal
+
+//Signals
+histA_IsUp = hist > hist[1] and hist > 0 //Histogram ticking up and above 0
+histA_IsDown = hist < hist[1] and hist > 0 //Histogram ticking down and above 0
+histB_IsDown = hist < hist[1] and hist <= 0 //Histgram ticking down and below 0
+histB_IsUp = hist > hist[1] and hist <= 0 //Histrogram ticket up and below 0
+macdPU = macd >= 0 and macd > macd[1] and macd > signal //macdPositiveUptrend
+macdNU = macd < 0 and macd > macd[1] and macd > signal //macdNegativeUptrend
+macdPD = macd >= 0 and macd < macd[1] and macd < signal //macdPositiveDowntrend
+macdND = macd < 0 and macd < macd[1] and macd < signal //macdNegativeDowntrend
+macdBearDivP = macdPU and histA_IsDown //macd in positive uptrend and histo tick down = red
+macdBearDivN = macdNU and histA_IsDown //macd in negative uptrend and histo tick down = yellow
+macdBullDivP = macdPD and histB_IsUp //macd in positive downtrend and histo tick up = aqua
+macdBullDivN = macdND and histB_IsUp //macd in negative downtrend and histo tick up = lime 
+rsiLong = rsi2 <= 10 and rsi5 <= 20 and rsi14 <= 30
+rsiShort = rsi2 >= 90 and rsi5 >= 80 and rsi14 >= 70
+rsiobvLong = rsiobv <= 30
+rsiobvShort = rsiobv >= 70
+
+
+//* RBR DBD Supply/Demand *//
+showSDLabel = input(title="Show Supply/Demand Lables?", type=bool, defval=true)
+cR = (close - open) >= 0 ? ((close - open) / (high - low))*100 > 50 ? true : false : na //Rally Candle
+cB = (abs(close - open) / (high - low))*100 < 50 ? true : false //Base Candle
+cD = (open - close) >= 0 ? ((open - close) / (high - low))*100 > 50 ? true : false : na //Drop Candle 
+
+limeBar = cR
+whiteBar = (cR[1] and cB) or (cD[1] and cB)
+redBar = cD
+
+barcolor(limeBar ? lime : na)
+barcolor(whiteBar ? white : na)
+barcolor(redBar ? red : na)
+
+//BRB -> Buy Continuation
+RBR = (cR[2] and cB[1] and cR) and 
+          (cR and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (volume[1] < volume) 
+          
+//DBD -> Sell Continuation
+DBD = (cD[2] and cB[1] and cD) 
+          and (cD and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (volume[1] < volume) 
+          
+//DBR -> Buy Reversal
+DBR = (cD[2] and cB[1] and cR) and 
+          (cR and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (high > hl2[2]) and (low > low[1]) and (low[1] < low[2])
+          
+//RBD -> Sell Reversal
+RBD = (cR[2] and cB[1] and cD) and 
+          (cD and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (low < hl2[2]) and (high < high[1]) and (high[1] > high[2])
+
+lastRBD = barssince(RBD) //Sell Reversal
+lastDBR = barssince(DBR) //Buy Reversal
+lastDBD = barssince(DBD) //Sell Continuation
+lastRBR = barssince(RBR) //Buy Continuation
+
+plotshape(showSDLabel ? RBR : na, style=shape.labelup, location=location.belowbar, offset=-1, color=lime, textcolor=white, transp=90, text = "R\nB\nR") //Buy Continuation
+plotshape(showSDLabel ? DBD : na, style=shape.labeldown, location=location.abovebar, offset=-1, color=red, textcolor=white, transp=90, text = "D\nB\nD") //Sell Continuation
+plotshape(showSDLabel ? DBR : na, style=shape.labelup, location=location.belowbar, offset=-1, color=green, textcolor=white, transp=70, text = "D\nB\nR") //Buy Reversal
+plotshape(showSDLabel ? RBD : na, style=shape.labeldown, location=location.abovebar, offset=-1, color=maroon, textcolor=white, transp=70, text = "R\nB\nD") //Sell Reversal
+
+// * TD Level Points * //
+showTDLevelPoints = input(title="Show TDSP/TDDP?", type=bool, defval=true)
+TDSP1 = high < high[1] and high[1] > high[2]
+TDSP2 = high < high[1] and high[1] < high[2] and high[2] > high[3] and high[3] > high[4]
+TDSP3 = high < high[1] and high[1] < high[2] and high[2] < high[3] and high[3] > high[4] and high[4] > high[5] and high[5] > high[6]
+TDDP1 = low > low[1] and low[1] < low[2]
+TDDP2 = low > low[1] and low[1] > low[2] and low[2] < low[3] and low[3] < low[4]
+TDDP3 = low > low[1] and low[1] > low[2] and low[2] > low[3] and low[3] < low[4] and low[4] < low[5] and low[5] < low[6]
+plotshape(showTDLevelPoints ? TDSP3 ? TDSP3 : na : na, title= "TDSP3", color=yellow, transp=40, size=size.tiny, style=shape.cross, location=location.abovebar, offset=-3)
+plotshape(showTDLevelPoints ? TDDP3 ? TDDP3 : na : na, title= "TDDP3", color=yellow, transp=40, size=size.tiny, style=shape.cross, location=location.belowbar, offset=-3)
+plotshape(showTDLevelPoints ? TDSP2 ? TDSP2 : na : na, title= "TDSP2", color=yellow, transp=80, size=size.tiny, style=shape.cross, location=location.abovebar, offset=-4)
+plotshape(showTDLevelPoints ? TDDP2 ? TDDP2 : na : na, title= "TDDP2", color=yellow, transp=80, size=size.tiny, style=shape.cross, location=location.belowbar, offset=-4)
+
+//TD Camouflage Buy & Sell P49 DemarkIndicatorExcerpt
+showTDCamoBS = input(title="Show TD Camo Buy/Sell?", type=bool, defval=true)
+TDCB = close < close[1] and close > open and low < low[2]
+TDCS = close > close[1] and close < open and low > low[2]
+plotshape(showTDCamoBS ? TDCB : na, style=shape.triangleup, color=lime, transp=55, location=location.belowbar, text="\nT\nD\nC\nB")
+plotshape(showTDCamoBS ? TDCS : na, style=shape.triangledown, color=red, transp=5, location=location.abovebar, text="\nT\nD\nC\nS")
+
+
+// *** Strategy Long/Short Call Calculation ***
+longEntry = na
+shortEntry = na
+inLongPosition  = na
+inShortPosition = na
+flat  = na
+inLongPosition := longEntry[1] ? true : shortEntry[1] ? false : inLongPosition[1]
+inShortPosition:= shortEntry[1] ? true : longEntry[1] ? false : inShortPosition[1]
+flat := not inLongPosition and not inShortPosition
+
+longEntry := (rsiobvLong[1] and rsiLong[1] and macdBullDivN) //or (inShortPosition and DBR)
+shortEntry := (rsiobvShort[1] and rsiShort[1] and macdBearDivP) //or (inLongPosition and RBD)
+//longEntry := (DBR) or (inShortPosition and RBR)
+//shortEntry := (RBD) or (inLongPosition and DBD)
+
+//*****  STUDY START *****//
+//Variables declaration
+isLongOpen = false
+isShortOpen = false
+stopLossPercent = input(3.5,"Stop Loss Percent")
+takeProfitPercent = input(8,"Profit Percent")
+trailStopPercent = input(5,"Trailing Stop Percent")
+
+//Order open on previous ticker?
+isLongOpen := nz(isLongOpen[1])
+isShortOpen := nz(isShortOpen[1])
+
+//Trailing and Profit variables
+stopTrigger = 0.0
+stopTrigger := na 
+
+profitTrigger = 0.0
+profitTrigger := na 
+
+trailTrigger = 0.0
+trailTrigger := na
+
+//obtain values from last ticker
+entryPrice=0.0
+entryPrice:= nz(entryPrice[1])
+
+stopLossLevel=0.0
+stopLossLevel:=nz(stopLossLevel[1])
+
+profitPriceLevel=0.0
+profitPriceLevel:=nz(profitPriceLevel[1])
+
+trailPriceLevel=0.0
+trailPriceLevel:=nz(trailPriceLevel[1])
+    
+//If in active trade, lets load with current value    
+if(isLongOpen )
+    profitTrigger := profitPriceLevel ? high : na
+    trailTrigger := trailPriceLevel ? high : na
+    stopTrigger :=  stopLossLevel ? low : na //was ohlc4 changed to low
+if(isShortOpen )
+    profitTrigger := profitPriceLevel ? low : na
+    trailTrigger := trailPriceLevel ? low : na
+    stopTrigger :=  stopLossLevel ? high : na //was ohlc4 changed to high
+
+isStopLoss = isLongOpen ? stopTrigger < stopLossLevel : (isShortOpen ? stopTrigger > stopLossLevel : na )
+isProfitCatch = isLongOpen ? profitTrigger > profitPriceLevel : (isShortOpen ? profitTrigger < profitPriceLevel : na )
+isTrailStop = isLongOpen ? trailTrigger > trailPriceLevel : (isShortOpen ? trailTrigger < trailPriceLevel : na)
+
+//Upon Entry, do this.
+if(longEntry or shortEntry)
+    entryPrice:=close //was ohlc4 changed to close
+
+//set price points for new orders
+if longEntry
+    stopLossLevel := (1 - 0.01 * stopLossPercent) * entryPrice
+    profitPriceLevel := (1 + 0.01 * takeProfitPercent) * entryPrice
+    trailPriceLevel := (1 + 0.01 * trailStopPercent) * entryPrice
+if shortEntry
+    stopLossLevel := (1 + 0.01 * stopLossPercent) * entryPrice
+    profitPriceLevel :=(1 - 0.01 * takeProfitPercent) * entryPrice
+    trailPriceLevel := (1 - 0.01 * trailStopPercent) * entryPrice
+
+//Just some high/low marker for info
+highest=0.0
+highest := high > highest[1] and entryPrice ? high : nz(highest[1])
+
+lowest=0.0
+lowest := (low < lowest[1] or lowest[1]==0.0 ) and entryPrice ? low : nz(lowest[1])
+
+shortExit = isShortOpen[1] and (isStopLoss or isProfitCatch or isTrailStop or longEntry)
+longExit = isLongOpen[1] and (isStopLoss or  isProfitCatch or isTrailStop or shortEntry)
+
+if (longExit or shortExit) and not (longEntry or shortEntry)
+    stopTrigger:=na
+    profitTrigger:=na
+    trailTrigger:=na
+    entryPrice:=na
+    stopLossLevel:=na
+    profitPriceLevel:=na
+    trailPriceLevel:=na
+    highest:=na
+    lowest:=na
+    inLongPosition:=na
+    inShortPosition:=na
+    
+//If the value changed to invoke a buy, lets set it before we leave
+isLongOpen := longEntry  ? true : (longExit == true ? false : isLongOpen)
+isShortOpen := shortEntry ? true : (shortExit == true ? false : isShortOpen)
+
+plotshape(longEntry and (inShortPosition or flat), style = shape.triangleup, size=size.small, color = lime, location = location.belowbar)
+plotshape(shortEntry and (inLongPosition or flat), style = shape.triangledown, size=size.small, color = red, location = location.abovebar) 
+
+//plotchar(entryPrice ? entryPrice : na, title= "Entry Level", color=white,  char="-", location=location.absolute)
+//plotchar(stopLossLevel ? stopLossLevel : na, title= "Stop Loss Level", color=yellow,  char="-", location=location.absolute)
+//plotchar(profitPriceLevel ? profitPriceLevel : na, title= "Profit Level", color=lime, char="-", location=location.absolute)
+//plotchar(trailPriceLevel ? trailPriceLevel : na, title= "Trail Stop Level", color=aqua, char="-", location=location.absolute)
+
+//plotshape(profitTrigger[1] ? isProfitCatch : na, title="Profit Exit Triggered", style=shape.circle, location=location.top, color=lime, transp=85, size=size.small)
+//plotshape(inLongPosition[1] and trailTrigger[1] ? isTrailStop : na, title="Trail Stop Exit Triggered", style=shape.circle, location=location.abovebar, color=aqua, transp=85, size=size.tiny)
+//plotshape(inShortPosition[1] and trailTrigger[1] ? isTrailStop : na, title="Trail Stop Exit Triggered", style=shape.circle, location=location.belowbar, color=aqua, transp=85, size=size.tiny)
+//plotshape(inLongPosition[1] and stopTrigger[1] ? isStopLoss : na, title="Stop Loss Triggered", style=shape.circle, location=location.belowbar, color=red, transp=85, size=size.tiny)
+//plotshape(inShortPosition[1] and stopTrigger[1] ? isStopLoss : na, title="Stop Loss Triggered", style=shape.circle, location=location.abovebar, color=red, transp=85, size=size.tiny)
+//*****  STUDY END *****//
+
+//*****  ALERTS START *****// 
+alertcondition(longEntry or shortEntry, title="Long/Short Triggered", message="L/S")
+alertcondition(longEntry, title="Buy", message="Long")
+alertcondition(shortEntry, title="Sell", message="Sell")
+alertcondition(isStopLoss, title="Stop Loss", message="Stop Loss")
+alertcondition(isTrailStop, title="Trail Stop", message="Trail Stop")
+//*****  ALERTS END *****// 

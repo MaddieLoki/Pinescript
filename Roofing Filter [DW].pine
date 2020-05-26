@@ -1,0 +1,183 @@
+https://www.tradingview.com/script/kPe86Nbc-Roofing-Filter-DW/
+
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © DonovanWall
+
+//??????? ???    ???
+//???????????    ???
+//???  ?????? ?? ???
+//???  ?????????????
+//??????????????????
+//???????  ???????? 
+
+//@version=4
+study("Roofing Filter [DW]", overlay=false)
+
+//This is an experimental study built on the concept of using roofing filters on price data proposed by John Ehlers.
+//Roofing filters are a type of bandpass filter conventionally used in HF radio receivers in the first IF stage to limit the frequency spectrum passed on to later stages in the receiver.
+
+//The goal in applying roofing filters to a price signal is to simultaneously attenuate high frequency noise and low frequency distortion to pass an oscillating signal with a nearly zero mean for analysis and/or further calculation.
+
+//In this study, there are three filter types to choose from:
+// -> Ehlers Roofing Filter, which passes data through a 2 pole high pass filter, then through a Super Smoother filter.
+// -> Gaussian Roofing Filter, which passes data through a 2 pole Gaussian high pass filter, then through a 2 pole Gaussian low pass filter.
+// -> Butterworth Roofing Filter, which passes data through a 2 pole Butterworth high pass filter, then through a 2 pole Butterworth low pass filter.
+//Each filter type has different amplitude and delay characteristics, so play around with each type and see which response suits your needs best.
+
+//There is an option to normalize the scale of the output as well. The normalization process in this script is computed by comparing positive and negative outputs to the filter's moving RMS value.
+
+//The resulting oscillator can be fed through numerous conventional indicators including Stochastic Oscillator, RSI, CCI, etc. to generate smoother, less distorted indicators for a clearer view of turning points.
+//Alternatively, it can also act as an indicator itself, as implied by the corresponding color scheme included in the script.
+
+//Although roofing filters are not conventionally used in the analysis of market data, applying such spectral analysis techniques may prove to be quite useful for the design of more efficient indicators and more reliable predictions.
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+//Update:
+// -> Fixed bug in RMS calculation. Big thanks to @yatrader2 for bringing this issue to my attention!
+// -> Reoganized script structure.
+// -> Added an optional compression algorithm to the script. This can be used to reduce transients (short duration, high amplitude values) by a specified level of intensity.
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+//Functions
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+//Ehlers Roofing Filter
+erf(x, t_hp, t_lp)=>
+    omega1 = 4*asin(1)/t_hp
+    omega2 = 4*asin(1)/t_lp
+    alpha  = (cos((sqrt(2)/2)*omega1) + sin((sqrt(2)/2)*omega1) - 1)/cos((sqrt(2)/2)*omega1)
+    hp     = 0.0
+    hp    := pow(1 - alpha/2, 2)*(x - 2*x[1] + x[2]) + 2*(1 - alpha)*nz(hp[1]) - pow(1 - alpha, 2)*nz(hp[2])
+    a1     = exp(-sqrt(2)*2*asin(1)/t_lp)
+    b1     = 2*a1*cos((sqrt(2)/2)*omega2)
+    c2     = b1
+    c3     = -pow(a1, 2)
+    c1     = 1 - c2 - c3
+    erf    = 0.0
+    erf   := c1*hp + c2*nz(erf[1]) + c3*nz(erf[2])
+    erf
+
+//Gaussian Roofing Filter
+grf(x, t_hp, t_lp)=>
+    beta1  = (1 - cos(4*asin(1)/t_hp))/(sqrt(2) - 1)
+    alpha1 = -beta1 + sqrt(pow(beta1, 2) + 2*beta1)
+    beta2  = (1 - cos(4*asin(1)/t_lp))/(sqrt(2) - 1)
+    alpha2 = -beta2 + sqrt(pow(beta2, 2) + 2*beta2)
+    ghp    = 0.0
+    ghp   := (1 - pow(alpha1, 2))*x + 2*(1 - alpha1)*(nz(ghp[1]) - x[1]) + pow(1 - alpha1, 2)*(x[2] - nz(ghp[2]))
+    grf    = 0.0
+    grf   := pow(alpha2, 2)*ghp + 2*(1 - alpha2)*nz(grf[1]) - pow(1 - alpha2, 2)*nz(grf[2])
+    grf
+
+//Butterworth Roofing Filter
+brf(x, t_hp, t_lp)=>
+    a1   = exp(-sqrt(2)*2*asin(1)/t_hp)
+    b1   = 2*a1*cos(sqrt(2)*2*asin(1)/t_hp)
+    c1   = pow(a1, 2)
+    d1   = ((1 - b1 + c1)/4)
+    a2   = exp(-sqrt(2)*2*asin(1)/t_lp)
+    b2   = 2*a2*cos(sqrt(2)*2*asin(1)/t_lp)
+    c2   = pow(a2, 2)
+    d2   = ((1 - b2 + c2)/4)
+    bhp  = 0.0
+    bhp := b1*nz(bhp[1]) - c1*nz(bhp[2]) + (1 - d1)*x - (b1 + 2*d1)*x[1] + (c1 - d1)*x[2]
+    brf  = 0.0
+    brf := b2*nz(brf[1]) - c2*nz(brf[2]) + d2*(bhp + 2*bhp[1] + bhp[2])
+    brf
+
+//Highest High Function
+hi(x, reset)=>
+    var hi = 0.0
+    hi := reset or (x > hi) ? x : hi
+    hi
+
+//Cumulative Mean Function
+c_mean(y)=>
+    var x     = 0
+    x        := x + 1
+    var y_sum = 0.0
+    y_sum    := y_sum + y
+    c_mean    = y_sum/x
+    c_mean
+
+//RMS Function
+RMS(x, t)=>
+    sqrt(sma(pow(x, 2), t))
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+//Inputs
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+//Source
+src = input(defval=close, title="Source")
+
+//Low Pass Cutoff Period
+lp_per = input(defval=10, minval=2, title="Low Pass Cutoff Period")
+
+//High Pass Cutoff Period
+hp_per = input(defval=30, minval=2, title="High Pass Cutoff Period")
+
+//Roofing Filter Type
+type = input(defval="Ehlers", options=["Ehlers", "Gaussian", "Butterworth"], title="Roofing Filter Type") 
+
+//Output Scale Normalization
+normalize = input(defval=false, title="Normalize Output Scale")
+
+//Signal Compression Inputs
+use_comp         = input(defval=false, title="Use Compression")
+comp_intensity   = input(defval=90.0, minval=0, maxval=100, title="Compression Intensity (%)")
+comp_thresh_type = input(defval="Auto", options=["Auto", "Custom"], title="Compression Threshold Type")
+comp_ht_custom   = input(defval=0.0, minval=0, title="Custom High Compression Threshold")
+comp_lt_custom   = input(defval=0.0, maxval=0, title="Custom Low Compression Threshold")
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+//Definitions
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 
+//Roofing Filter Type
+roof = type=="Ehlers" ? erf(src, hp_per, lp_per) : type=="Gaussian" ? grf(src, hp_per, lp_per) : brf(src, hp_per, lp_per) 
+
+//Scale Normalization
+rms = RMS(roof, round((hp_per + lp_per)/2))
+norm_roof = roof > 0 ? roof/rms : roof < 0 ? -abs(roof)/rms : 0
+
+//Filter
+filt1 = normalize ? norm_roof : roof
+
+//Dichotomized QRS Values
+filt_pos = filt1 > 0 ? filt1 : 0
+filt_neg = filt1 < 0 ? filt1 : 0
+
+//Compressor Thresholds
+hi_filt  = hi(filt_pos, crossover(filt1, 0))
+lo_filt  = -hi(abs(filt_neg), crossunder(filt1, 0))
+comp_ht  = comp_thresh_type=="Auto" ? c_mean(hi_filt) : comp_ht_custom
+comp_lt  = comp_thresh_type=="Auto" ? c_mean(lo_filt) : comp_lt_custom
+
+//Transient Reduction
+filt = use_comp ? (filt1 > comp_ht ? filt1 - comp_intensity*(filt1 - comp_ht)/100 :
+       filt1 < comp_lt ? filt1 + comp_intensity*(comp_lt - filt1)/100 : filt1) : filt1
+
+//Colors
+filt_color = (filt > 0) and (filt > filt[1]) ? #38ff97 : (filt < 0) and (filt < filt[1]) ? #ff3874 : color.silver
+hist_color = filt > 0 ? #38ff97 : filt < 0 ? #ff3874 : color.silver
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+//Outputs
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+//Center Line
+plot(0, color=color.orange, transp=0, title="Center Line")
+
+//Filter Line
+plot(filt, color=filt_color, linewidth=3, transp=0, title="Filter Line")
+
+//Filter Columns
+plot(filt, color=hist_color, style=plot.style_columns, transp=80, title="Filter Columns")
+
+//Thresholds
+plot(use_comp ? comp_ht : na, color=#cccccc, style=plot.style_circles, transp=80, title="High Compression Threshold")
+plot(use_comp ? comp_lt : na, color=#cccccc, style=plot.style_circles, transp=80, title="Low Compression Threshold")
+
+//Bar Color
+barcolor(filt_color)

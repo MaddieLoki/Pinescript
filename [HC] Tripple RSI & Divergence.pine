@@ -1,0 +1,92 @@
+//@version=3
+//Script snipets & inspiration from Chris Moody, Libertus and Sander
+//Triple RSI Indicator with Divergence
+//Edited by Henri Cormier
+study(title="[HC] Tripple RSI & Divergence", shorttitle="[HC] 3 RSI & DIV", overlay=false)
+src = close, 
+len2 = input(2, minval=1, title="RSI Length 2")
+len5 = input(7, minval=1, title="RSI Length 7")
+len14 = input(14, minval=1, title="RSI Length 14")
+rsi2 = rsi(close, len2)
+rsi5 = rsi(close, len5)
+rsi14 = rsi(close, len14)
+
+//xbars = input(14, "Div lookback period (bars)?", integer, minval=1)
+//hb = abs(highestbars(rsi14, xbars)) // Finds bar with highest value in last X bars
+//lb = abs(lowestbars(rsi14, xbars)) // Finds bar with lowest value in last X bars
+
+cciP = input(20, title="CCI Period Length")
+rsiP = input(20, title="RSI Period Length")
+cciThreshold = input(0, title="CCI threshold for color coding")
+
+obv = cum(change(src) > 0 ? volume : change(src) < 0 ? -volume : 0*volume)
+c = cci(src, cciP)
+rsiobv = na
+rsiobv := rsi(obv, rsiP)
+plot(rsiobv, color=c>=cciThreshold?lime:red, title="RSIa", transp=1, linewidth=1)
+alertcondition(rsiobv > 70 or rsiobv < 30, title="RSIOBV L/S Trigger", message="RSIOBV_LS")
+
+// Plots 
+//plot(rsi2, title="RSI2", style=line, linewidth=1, color=red, transp=0)
+//plot(rsi5, title="RSI5", style=line, linewidth=1, color=lime, transp=0)
+plot(rsi14, title="RSI14", style=line, linewidth=1, color=yellow, transp=0)
+plot(sma(rsi14,9), title="RSI SMA", style=line, linewidth=1, color=#8146ff, transp=0) //Purple
+plot(ema(rsi14,45), title="RSI SMA", style=line, linewidth=1, color=aqua, transp=0) //Aqua
+
+emaCrossUp = false
+emaCrossUp := crossover(sma(rsi14,9), ema(rsi14,45))
+emaCrossDown = false
+emaCrossDown := crossunder(sma(rsi14,9), ema(rsi14,45))
+plotshape( emaCrossUp ? emaCrossUp : na, title= "ema cross up", color=lime, style=shape.diamond, location=location.top)
+plotshape( emaCrossDown ? emaCrossDown : na, title= "ema cross down", color=red, style=shape.diamond, location=location.top)
+
+//plotshape(c>=cciThreshold and c[1]<cciThreshold[1] ? true : na, title="RSI OVB Cross", style=shape.circle, location=location.top, color=lime, size=size.tiny)
+//plotshape(c<cciThreshold and c[1]>=cciThreshold[1] ? true : na, title="RSI OVB Cross", style=shape.circle, location=location.top, color=red, size=size.tiny)
+
+band80 = hline(80, title="BU80", linestyle=dotted, linewidth=1, color=green)
+band70 = hline(70, title="BU70", linestyle=dotted, linewidth=1, color=gray)
+band40 = hline(40, title="BU40", linestyle=dotted, linewidth=1, color=green)
+band50 = hline(50, title="BU50", linestyle=dotted, linewidth=1, color=gray)
+band60 = hline(60, title="BE60", linestyle=dotted, linewidth=1, color=red)
+band30 = hline(30, title="BU30", linestyle=dotted, linewidth=1, color=gray)
+band20 = hline(20, title="BE20", linestyle=dotted, linewidth=1, color=red)
+bgcolor(rsi2 <= 10 ? green : rsi2 >= 90 ? red : black, transp=85)
+bgcolor(rsi5 <= 20 ? green : rsi5 >= 80 ? red : black, transp=75)
+bgcolor(rsi14 <= 30 ? green : rsi14 >= 70 ? red : black, transp=65)
+rsiLong = rsi2 <= 10 and rsi5 <= 20 and rsi14 <= 30
+rsiShort = rsi2 >= 90 and rsi5 >= 80 and rsi14 >= 70
+
+// *** RSI Divergence START ***
+length = input(45)
+
+f_top_fractal(_src)=>_src[4] < _src[2] and _src[3] < _src[2] and _src[2] > _src[1] and _src[2] > _src[0]
+f_bot_fractal(_src)=>_src[4] > _src[2] and _src[3] > _src[2] and _src[2] < _src[1] and _src[2] < _src[0]
+f_fractalize(_src)=>f_top_fractal(_src) ? 1 : f_bot_fractal(_src) ? -1 : 0
+
+rsi_high = rsi(high, length)
+rsi_low = rsi(low, length)
+fractal_top_rsi = f_fractalize(rsi_high) > 0 ? rsi_high[2] : na
+fractal_bot_rsi = f_fractalize(rsi_low) < 0 ? rsi_low[2] : na
+
+rsi_high_prev = valuewhen(fractal_top_rsi, rsi_high[2], 1) 
+rsi_high_price = valuewhen(fractal_top_rsi, high[2], 1)
+rsi_low_prev = valuewhen(fractal_bot_rsi, rsi_low[2], 1) 
+rsi_low_price = valuewhen(fractal_bot_rsi, low[2], 1)
+
+regular_bearish_div = fractal_top_rsi and high[2] > rsi_high_price and rsi_high[2] < rsi_high_prev
+hidden_bearish_div = fractal_top_rsi and high[2] < rsi_high_price and rsi_high[2] > rsi_high_prev
+regular_bullish_div = fractal_bot_rsi and low[2] < rsi_low_price and rsi_low[2] > rsi_low_prev
+hidden_bullish_div = fractal_bot_rsi and low[2] > rsi_low_price and rsi_low[2] < rsi_low_prev
+
+plotshape(title='+RBD', series=regular_bearish_div ? rsi_high[2] : na, text='R\n?', style=shape.labeldown, location=location.absolute, color=maroon, textcolor=white, offset=-2)
+plotshape(title='+HBD', series=hidden_bearish_div ? rsi_high[2] : na, text='H\n?', style=shape.labeldown, location=location.absolute, color=maroon, textcolor=white, offset=-2)
+plotshape(title='-RBD', series=regular_bullish_div ? rsi_low[2] : na, text='?\nR', style=shape.labelup, location=location.absolute, color=green, textcolor=white, offset=-2)
+plotshape(title='-HBD', series=hidden_bullish_div ? rsi_low[2] : na, text='?\nH', style=shape.labelup, location=location.absolute, color=green, textcolor=white, offset=-2)
+// *** RSI Divergence END ***
+
+//*****  ALERTS START *****// 
+alertcondition(regular_bullish_div or hidden_bullish_div, title="RSI Bull Div", message="RSI Bull Div")
+alertcondition(regular_bearish_div or hidden_bearish_div, title="RSI Bear Div", message="RSI Bear Div")
+alertcondition(rsiLong, title="RSI Long", message="RSI Long")
+alertcondition(rsiShort, title="RSI Short", message="RSI Short")
+//*****  ALERTS END *****// 

@@ -1,0 +1,61 @@
+//* RBR DBD Supply/Demand *//
+cR = (close - open) >= 0 ? ((close - open) / (high - low))*100 > 50 ? true : false : na //Rally Candle
+cB = (abs(close - open) / (high - low))*100 < 50 ? true : false //Base Candle
+cD = (open - close) >= 0 ? ((open - close) / (high - low))*100 > 50 ? true : false : na //Drop Candle 
+
+limeBar = cR
+whiteBar = (cR[1] and cB) or (cD[1] and cB)
+redBar = cD
+
+barcolor(limeBar ? lime : na)
+barcolor(whiteBar ? white : na)
+barcolor(redBar ? red : na)
+
+inputATR = input(title="ATR Bars", type=integer, defval=6, minval=1, maxval=50)
+inputATRRange = input(title="ATR Range", type=integer, defval=50, minval=1, maxval=250)
+
+//BRB -> Buy Continuation
+RBR = (atr(inputATR) > inputATRRange) and (cR[2] and cB[1] and cR) and 
+          (cR and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (volume[1] < volume) 
+          
+//DBD -> Sell Continuation
+DBD = (atr(inputATR) > inputATRRange) and (cD[2] and cB[1] and cD) 
+          and (cD and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (volume[1] < volume) 
+          
+//DBR -> Buy Reversal
+DBR = (atr(inputATR) > inputATRRange) and (cD[2] and cB[1] and cR) and 
+          (cR and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (high > hl2[2]) and (low > low[1]) and (low[1] < low[2])
+          
+//RBD -> Sell Reversal
+RBD = (atr(inputATR) > inputATRRange) and (cR[2] and cB[1] and cD) and 
+          (cD and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (low < hl2[2]) and (high < high[1]) and (high[1] > high[2])
+
+lastRBD = barssince(RBD) //Sell Reversal
+lastDBR = barssince(DBR) //Buy Reversal
+lastDBD = barssince(DBD) //Sell Continuation
+lastRBR = barssince(RBR) //Buy Continuation
+
+plotshape(RBR, style=shape.labelup, location=location.belowbar, offset=-1, color=lime, textcolor=white, text = "R\nB\nR") //Buy Continuation
+plotshape(DBD, style=shape.labeldown, location=location.abovebar, offset=-1, color=red, textcolor=white, text = "D\nB\nD") //Sell Continuation
+plotshape(DBR, style=shape.labelup, location=location.belowbar, offset=-1, color=green, textcolor=white, text = "D\nB\nR") //Buy Reversal
+plotshape(RBD, style=shape.labeldown, location=location.abovebar, offset=-1, color=maroon, textcolor=white, text = "R\nB\nD") //Sell Reversal
+
+// * TD Level Points * //
+TDSP1 = high < high[1] and high[1] > high[2]
+TDSP2 = high < high[1] and high[1] < high[2] and high[2] > high[3] and high[3] > high[4]
+TDSP3 = high < high[1] and high[1] < high[2] and high[2] < high[3] and high[3] > high[4] and high[4] > high[5] and high[5] > high[6]
+TDDP1 = low > low[1] and low[1] < low[2]
+TDDP2 = low > low[1] and low[1] > low[2] and low[2] < low[3] and low[3] < low[4]
+TDDP3 = low > low[1] and low[1] > low[2] and low[2] > low[3] and low[3] < low[4] and low[4] < low[5] and low[5] < low[6]
+plotshape(TDSP3 ? TDSP3 : na, title= "TDSP3", color=yellow, transp=40, size=size.tiny, style=shape.cross, location=location.abovebar, offset=-3)
+plotshape(TDDP3 ? TDDP3 : na, title= "TDDP3", color=yellow, transp=40, size=size.tiny, style=shape.cross, location=location.belowbar, offset=-3)
+plotshape(TDSP2 ? TDSP2 : na, title= "TDSP2", color=yellow, transp=80, size=size.tiny, style=shape.cross, location=location.abovebar, offset=-4)
+plotshape(TDDP2 ? TDDP2 : na, title= "TDDP2", color=yellow, transp=80, size=size.tiny, style=shape.cross, location=location.belowbar, offset=-4)

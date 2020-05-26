@@ -1,0 +1,307 @@
+//@version=3
+study("[HC] Study: TESTING", overlay=true)
+
+src = close
+
+//*  Triple RSI *//
+len2 = input(2, minval=1, title="RSI Length 2")
+len5 = input(7, minval=1, title="RSI Length 7")
+len14 = input(14, minval=1, title="RSI Length 14")
+rsi2 = rsi(close, len2)
+rsi5 = rsi(close, len5)
+rsi14 = rsi(close, len14)
+xbars = input(14, "Div lookback period (bars)?", integer, minval=1)
+hb = abs(highestbars(rsi14, xbars)) // Finds bar with highest value in last X bars
+lb = abs(lowestbars(rsi14, xbars)) // Finds bar with lowest value in last X bars
+
+//*** Divergence Start ***
+uHid = true
+uReg = true
+rsi_smooth = 7
+
+//  ||  Functions:
+f_top_fractal(_src)=>_src[4] < _src[2] and _src[3] < _src[2] and _src[2] > _src[1] and _src[2] > _src[0]
+f_bot_fractal(_src)=>_src[4] > _src[2] and _src[3] > _src[2] and _src[2] < _src[1] and _src[2] < _src[0]
+f_fractalize(_src)=>f_top_fractal(_src) ? 1 : f_bot_fractal(_src) ? -1 : 0
+
+method_high = rsi(high, rsi_smooth)
+method_low = rsi(low, rsi_smooth)
+fractal_top = f_fractalize(method_high) > 0 ? method_high[2] : na
+fractal_bot = f_fractalize(method_low) < 0 ? method_low[2] : na
+high_prev = valuewhen(fractal_top, method_high[2], 1) 
+high_price = valuewhen(fractal_top, high[2], 1)
+low_prev = valuewhen(fractal_bot, method_low[2], 1) 
+low_price = valuewhen(fractal_bot, low[2], 1)
+regular_bearish_div = fractal_top and high[2] > high_price and method_high[2] < high_prev
+hidden_bearish_div = fractal_top and high[2] < high_price and method_high[2] > high_prev
+regular_bullish_div = fractal_bot and low[2] < low_price and method_low[2] > low_prev
+hidden_bullish_div = fractal_bot and low[2] > low_price and method_low[2] < low_prev
+//plotshape(title='+RBD', series=regular_bearish_div ? high[2] : na, text='?', style=shape.labeldown, location=location.absolute, color=red, textcolor=white, offset=-2)
+//plotshape(title='+HBD', series=hidden_bearish_div ? high[2] : na, text='?', style=shape.labeldown, location=location.absolute, color=yellow, textcolor=white, offset=-2)
+//plotshape(title='-RBD', series=regular_bullish_div ? low[2] : na, text='?', style=shape.labelup, location=location.absolute, color=lime, textcolor=white, offset=-2)
+//plotshape(title='-HBD', series=hidden_bullish_div ? low[2] : na, text='?', style=shape.labelup, location=location.absolute, color=aqua, textcolor=white, offset=-2)
+//*** Divergence End *** 
+
+//*** Dolchian/Bollinger Hybrid ***
+tf = input(24)
+factor = tf*(syminfo.mintick*10)
+trend = round(hl2/factor)*factor
+smoothtrend = sma(trend, tf)
+band1 = max(smoothtrend-stdev(trend, tf)*(tf*0.125), lowest(tf))
+band2 = min(smoothtrend+stdev(trend, tf)*(tf*0.125), highest(tf))
+//plot(trend)
+//plot(smoothtrend, color=orange)
+b1 = plot(band1, color=gray)
+b2 = plot(band2, color=gray)
+fill(b1,b2, color=gray, transp=95)
+
+// Inputs EMA
+DisplayEMA = input(true, title="Display EMA")
+ma8 = na
+ma8 := ema(src, 8)
+ma13 = na
+ma13 := ema(src, 13)
+ma21 = na
+ma21 := ema(src, 21)
+ma55 = na
+ma55 := ema(src, 55)
+ma100 = na
+ma100 := ema(src, 100)
+ma200 = na
+ma200 := ema(src, 200)
+vegas12 = na
+vegas12 := ema(src, 12)
+vegas144 = na
+vegas144 := ema(src, 144)
+vegas169 = na
+vegas169 := ema(src, 169)
+golden_cond = false
+golden_cond := cross(ma55, ma200) and ma8 > ma100 and ma13 > ma100 and ma21 > ma100
+death_cond = false
+death_cond := cross(ma200, ma55) and ma8 < ma100 and ma13 < ma100 and ma21 < ma100
+
+// Plotting EMA
+plotshape(golden_cond, style=shape.triangleup, location=location.belowbar, color=lime, text = "\nG\nX")
+plotshape(death_cond, style=shape.triangledown, location=location.abovebar, color=red, text = "D\nX\n")
+//plot( ma8, color=red, transp=0, style=line, title="8", linewidth=1)
+//plot( ma13, color=orange, transp=0, style=line, title="13", linewidth=1)
+plot( ma21, color=yellow, transp=0, style=line, title="21", linewidth=1)
+plot( ma55, color=lime, transp=0, style=line, title="55", linewidth=1)
+//plot( ma100, color=aqua, transp=0, style=line, title="100", linewidth=1)
+plot( ma200, color=white, transp=0, style=line, title="200", linewidth=1)
+plot( vegas12, color=red, transp=0, style=line, title="vegas12", linewidth=1)
+//plot( vegas144, color=orange, transp=0, style=line, title="vegas144", linewidth=2)
+plot( vegas169, color=maroon, transp=0, style=line, title="vegas169", linewidth=1)
+
+// *** DeMarker Calculations ***
+per=input(title="DeMarker Period",type=integer,defval=13)
+demax=high>high[1] ? high-high[1] : 0   
+demin=low<low[1] ? low[1]-low : 0
+demax_av=sma(demax,per)
+demin_av=sma(demin,per)
+dmark=demax_av/(demax_av+demin_av)
+
+// *** MACD Calculations ***
+fastLength = input(12, minval=1)
+slowLength=input(26,minval=1)
+signalLength=input(9,minval=1)
+fastMA = ema(src, fastLength)
+slowMA = ema(src, slowLength)
+macd = fastMA - slowMA
+signal = sma(macd, signalLength)
+hist = macd - signal
+
+//Signals
+histA_IsUp = hist > hist[1] and hist > 0 //Histogram ticking up and above 0
+histA_IsDown = hist < hist[1] and hist > 0 //Histogram ticking down and above 0
+histB_IsDown = hist < hist[1] and hist <= 0 //Histgram ticking down and below 0
+histB_IsUp = hist > hist[1] and hist <= 0 //Histrogram ticket up and below 0
+macdPU = macd >= 0 and macd > macd[1] and macd > signal //macdPositiveUptrend
+macdNU = macd < 0 and macd > macd[1] and macd > signal //macdNegativeUptrend
+macdPD = macd >= 0 and macd < macd[1] and macd < signal //macdPositiveDowntrend
+macdND = macd < 0 and macd < macd[1] and macd < signal //macdNegativeDowntrend
+macdBearDivP = macdPU and histA_IsDown //macd in positive uptrend and histo tick down = red
+macdBearDivN = macdNU and histA_IsDown //macd in negative uptrend and histo tick down = yellow
+macdBullDivP = macdPD and histB_IsUp //macd in positive downtrend and histo tick up = aqua
+macdBullDivN = macdND and histB_IsUp //macd in negative downtrend and histo tick up = lime 
+dolchianLong = src > band1
+dolchianShort = src < band2
+dmarkShort = (dmark >= 0.75)
+dmarkLong = (dmark <= 0.25)
+rsiLong = rsi2 <= 10 and rsi5 <= 20 and rsi14 <= 30
+rsiShort = rsi2 >= 90 and rsi5 >= 80 and rsi14 >= 70
+
+//* RBR DBD Supply/Demand *//
+cR = (close - open) >= 0 ? ((close - open) / (high - low))*100 > 50 ? true : false : na //Rally Candle
+cB = (abs(close - open) / (high - low))*100 < 50 ? true : false //Base Candle
+cD = (open - close) >= 0 ? ((open - close) / (high - low))*100 > 50 ? true : false : na //Drop Candle 
+
+limeBar = cR
+whiteBar = (cR[1] and cB) or (cD[1] and cB)
+redBar = cD
+
+barcolor(limeBar ? lime : na)
+barcolor(whiteBar ? white : na)
+barcolor(redBar ? red : na)
+
+//BRB -> Buy Continuation
+RBR = (atr(5) > 25) and (cR[2] and cB[1] and cR) and 
+          (cR and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (volume[1] < volume) 
+          
+//DBD -> Sell Continuation
+DBD = (atr(5) > 25) and (cD[2] and cB[1] and cD) 
+          and (cD and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (volume[1] < volume) 
+          
+//DBR -> Buy Reversal
+DBR = (atr(5) > 25) and (cD[2] and cB[1] and cR) and 
+          (cR and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (high > hl2[2]) and (low > low[1]) and (low[1] < low[2])
+          
+//RBD -> Sell Reversal
+RBD = (atr(5) > 25) and (cR[2] and cB[1] and cD) and 
+          (cD and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (low < hl2[2]) and (high < high[1]) and (high[1] > high[2])
+
+lastRBD = barssince(RBD)
+
+
+plotshape(RBR, style=shape.labelup, location=location.belowbar, offset=-1, color=lime, textcolor=white, text = "R\nB\nR") //Buy Continuation
+plotshape(DBD, style=shape.labeldown, location=location.abovebar, offset=-1, color=red, textcolor=white, text = "D\nB\nD") //Sell Continuation
+plotshape(DBR, style=shape.labelup, location=location.belowbar, offset=-1, color=green, textcolor=white, text = "D\nB\nR") //Buy Reversal
+plotshape(RBD, style=shape.labeldown, location=location.abovebar, offset=-1, color=maroon, textcolor=white, text = "R\nB\nD") //Sell Reversal
+
+
+// *** Strategy Long/Short Call Calculation ***
+longEntry = na
+shortEntry = na
+inLongPosition  = na
+inShortPosition = na
+flat  = na
+inLongPosition := longEntry[1] ? true : shortEntry[1] ? false : inLongPosition[1]
+inShortPosition:= shortEntry[1] ? true : longEntry[1] ? false : inShortPosition[1]
+flat := not inLongPosition and not inShortPosition
+
+//longEntry := (macdBullDivN and dmarkLong) or (inShortPosition and regular_bullish_div)
+//shortEntry := (macdBearDivP and dmarkShort) or (inLongPosition and regular_bearish_div)
+//longEntry := (macdBullDivN and dmarkLong and rsiLong) or (inShortPosition and regular_bullish_div)
+//shortEntry := (macdBearDivP and dmarkShort and rsiShort) or (inLongPosition and regular_bearish_div)
+longEntry := (DBR or RBR) or (inShortPosition and RBR)
+shortEntry := (RBD or DBD) or (inLongPosition and DBD)
+
+
+//*****  STUDY START *****//
+//Variables declaration
+isLongOpen = false
+isShortOpen = false
+stopLossPercent = input(1.5,"Stop Loss Percent")
+takeProfitPercent = input(20,"Profit Percent")
+trailStopPercent = input(1,"Trailing Stop Percent")
+
+//Order open on previous ticker?
+isLongOpen := nz(isLongOpen[1])
+isShortOpen := nz(isShortOpen[1])
+
+//Trailing and Profit variables
+stopTrigger = 0.0
+stopTrigger := na 
+
+profitTrigger = 0.0
+profitTrigger := na 
+
+trailTrigger = 0.0
+trailTrigger := na
+
+//obtain values from last ticker
+entryPrice=0.0
+entryPrice:= nz(entryPrice[1])
+
+stopLossLevel=0.0
+stopLossLevel:=nz(stopLossLevel[1])
+
+profitPriceLevel=0.0
+profitPriceLevel:=nz(profitPriceLevel[1])
+
+trailPriceLevel=0.0
+trailPriceLevel:=nz(trailPriceLevel[1])
+    
+//If in active trade, lets load with current value    
+if(isLongOpen )
+    profitTrigger := profitPriceLevel ? high : na
+    trailTrigger := trailPriceLevel ? high : na
+    stopTrigger :=  stopLossLevel ? ohlc4 : na 
+if(isShortOpen )
+    profitTrigger := profitPriceLevel ? low : na
+    trailTrigger := trailPriceLevel ? low : na
+    stopTrigger :=  stopLossLevel ? ohlc4 : na 
+
+isStopLoss = isLongOpen ? stopTrigger < stopLossLevel : (isShortOpen ? stopTrigger > stopLossLevel : na )
+isProfitCatch = isLongOpen ? profitTrigger > profitPriceLevel : (isShortOpen ? profitTrigger < profitPriceLevel : na )
+isTrailStop = isLongOpen ? trailTrigger > trailPriceLevel : (isShortOpen ? trailTrigger < trailPriceLevel : na)
+
+//Upon Entry, do this.
+if(longEntry or shortEntry)
+    entryPrice:=ohlc4 
+
+//set price points for new orders
+if longEntry
+    stopLossLevel := (1 - 0.01 * stopLossPercent) * entryPrice
+    profitPriceLevel := (1 + 0.01 * takeProfitPercent) * entryPrice
+    trailPriceLevel := (1 + 0.01 * trailStopPercent) * entryPrice
+if shortEntry
+    stopLossLevel := (1 + 0.01 * stopLossPercent) * entryPrice
+    profitPriceLevel :=(1 - 0.01 * takeProfitPercent) * entryPrice
+    trailPriceLevel := (1 - 0.01 * trailStopPercent) * entryPrice
+
+//Just some high/low marker for info
+highest=0.0
+highest := high > highest[1] and entryPrice ? high : nz(highest[1])
+
+lowest=0.0
+lowest := (low < lowest[1] or lowest[1]==0.0 ) and entryPrice ? low : nz(lowest[1])
+
+shortExit = isShortOpen[1] and (isStopLoss or isProfitCatch or isTrailStop or longEntry)
+longExit = isLongOpen[1] and (isStopLoss or  isProfitCatch or isTrailStop or shortEntry)
+
+if (longExit or shortExit) and not (longEntry or shortEntry)
+    stopTrigger:=na
+    profitTrigger:=na
+    trailTrigger:=na
+    entryPrice:=na
+    stopLossLevel:=na
+    profitPriceLevel:=na
+    trailPriceLevel:=na
+    highest:=na
+    lowest:=na
+    inLongPosition:=na
+    inShortPosition:=na
+    
+//If the value changed to invoke a buy, lets set it before we leave
+isLongOpen := longEntry  ? true : (longExit == true ? false : isLongOpen)
+isShortOpen := shortEntry ? true : (shortExit == true ? false : isShortOpen)
+
+plotshape(longEntry and (inShortPosition or flat), style = shape.flag, color = lime, location = location.belowbar, text="\nB\nU\nY")
+plotshape(shortEntry and (inLongPosition or flat), style = shape.flag, color = red, location = location.abovebar, text="S\nE\nL\nL\n") 
+
+plotshape(entryPrice ? entryPrice : na, title= "Entry Level", color=white, style=shape.cross, location=location.absolute)
+plotshape(stopLossLevel ? stopLossLevel : na, title= "Stop Loss Level", color=yellow, style=shape.cross, location=location.absolute)
+//plotshape(profitPriceLevel ? profitPriceLevel : na, title= "Profit Level", color=lime, style=shape.cross, location=location.absolute)
+plotshape(trailPriceLevel ? trailPriceLevel : na, title= "Trail Stop Level", color=aqua, style=shape.cross, location=location.absolute)
+//plotshape(profitTrigger[1] ? isProfitCatch : na, title="Profit Exit Triggered", style=shape.diamond, location=location.top, color=lime, size=size.small)
+plotshape(inLongPosition[1] and trailTrigger[1] ? isTrailStop : na, title="Trail Stop Exit Triggered", style=shape.diamond, location=location.abovebar, color=aqua, size=size.tiny)
+plotshape(inShortPosition[1] and trailTrigger[1] ? isTrailStop : na, title="Trail Stop Exit Triggered", style=shape.diamond, location=location.belowbar, color=aqua, size=size.tiny)
+plotshape(inLongPosition[1] and stopTrigger[1] ? isStopLoss : na, title="Stop Loss Triggered", style=shape.diamond, location=location.belowbar, color=red, size=size.tiny)
+plotshape(inShortPosition[1] and stopTrigger[1] ? isStopLoss : na, title="Stop Loss Triggered", style=shape.diamond, location=location.abovebar, color=red, size=size.tiny)
+//*****  STUDY END *****//
+
+//*****  ALERTS START *****// 
+alertcondition(longEntry, title="Alt Buy", message="ALT Long")
+alertcondition(shortEntry, title="Alt Sell", message="ALT Sell")
+alertcondition(isStopLoss, title="ALT Stop Loss", message="ALT Stop Loss")
+alertcondition(isTrailStop, title="ALT Trail Stop", message="ALT Trail Stop")
+//*****  ALERTS END *****// 

@@ -1,0 +1,148 @@
+//@version=3
+study("[HC] Crypto Bitmex Screener", shorttitle="Bitmex Screener", overlay=false, scale=scale.right)
+
+src = close
+tPeriod = input("60", title="Ticker Time Frame")
+
+//*  Triple RSI *//
+// len2 = input(2, minval=1, title="RSI Length 2")
+// len5 = input(7, minval=1, title="RSI Length 7")
+// len14 = input(14, minval=1, title="RSI Length 14")
+// rsi2 = rsi(close, len2)
+// rsi5 = rsi(close, len5)
+// rsi14 = rsi(close, len14)
+
+
+//* RSIOBV *//
+// cciP = input(20, title="CCI Period Length")
+// rsiP = input(20, title="RSI Period Length")
+// cciThreshold = input(0, title="CCI threshold for color coding")
+// emaLength = input(13, title="EMA Length/RSI_OBV")
+// obv = cum(change(src) > 0 ? volume : change(src) < 0 ? -volume : 0*volume)
+// c = cci(src, cciP)
+// rsiobv = na
+// rsiobv := rsi(obv, rsiP)
+
+// *** MACD Calculations ***
+// fastLength = input(title="MACD Fast Length", defval=12, minval=1)
+// slowLength=input(title="MACD Slow Length", defval=26,minval=1)
+// signalLength=input(title="MACD Signal Length", defval=9,minval=1)
+// fastMA = ema(src, fastLength)
+// slowMA = ema(src, slowLength)
+// macd = fastMA - slowMA
+// signal = sma(macd, signalLength)
+// hist = macd - signal
+
+//* Algo Strategy Inputs *//
+inpDescriptionStrategy = input(defval=true, title = "**Strategy Settings**")
+useRes      = input(defval = true, title = "Use Alternate Resolution?")
+intRes      = input(defval = 3,    title = "Multiplier for Alernate Resolution")
+stratRes    = ismonthly? tostring(interval*intRes,"###M") : isweekly? tostring(interval*intRes,"###W") : isdaily?  tostring(interval*intRes,"###D") : isintraday ? tostring(interval*intRes,"####") : '60'
+basisType   = input(defval = "SMMA", title = "Basis Moving Average Type: ", options=["SMA", "EMA", "DEMA", "TEMA", "WMA", "VWMA", "SMMA", "HullMA", "LSMA", "ALMA", "SSMA", "TMA"])
+basisLen    = input(defval = 8, title = "MA Period", minval = 1)
+offsetSigma = input(defval = 6, title = "Offset for LSMA / Sigma for ALMA", minval = 0)
+offsetALMA  = input(defval = 0.85, title = "Offset for ALMA", minval = 0, step = 0.01)
+delayOffset = input(defval = 0, title = "Delay Open/Close MA (Forces Non-Repainting)", minval = 0, step = 1)
+cloudSpread = input(defval = 1, title="Cloud Spread Trigger", minval = 0)
+
+//* Return MA Input Selection *//
+variant(type, src, len, offSig, offALMA) =>
+    v1 = sma(src, len)                                                  // Simple
+    v2 = ema(src, len)                                                  // Exponential
+    v3 = 2 * v2 - ema(v2, len)                                          // Double Exponential
+    v4 = 3 * (v2 - ema(v2, len)) + ema(ema(v2, len), len)               // Triple Exponential
+    v5 = wma(src, len)                                                  // Weighted
+    v6 = vwma(src, len)                                                 // Volume Weighted
+    v7 = 0.0
+    v7 := na(v7[1]) ? sma(src, len) : (v7[1] * (len - 1) + src) / len    // Smoothed
+    v8 = wma(2 * wma(src, len / 2) - wma(src, len), round(sqrt(len)))   // Hull
+    v9 = linreg(src, len, offSig)                                       // Least Squares
+    v10 = alma(src, len, offALMA, offSig)                               // Arnaud Legoux
+    v11 = sma(v1,len)                                                   // Triangular (extreme smooth)
+    // SuperSmoother filter
+    // © 2013  John F. Ehlers
+    a1 = exp(-1.414*3.14159 / len)
+    b1 = 2*a1*cos(1.414*3.14159 / len)
+    c2 = b1
+    c3 = (-a1)*a1
+    c1 = 1 - c2 - c3
+    v12 = 0.0
+    v12 := c1*(src + nz(src[1])) / 2 + c2*nz(v12[1]) + c3*nz(v12[2])
+    type=="EMA"?v2 : type=="DEMA"?v3 : type=="TEMA"?v4 : type=="WMA"?v5 : type=="VWMA"?v6 : type=="SMMA"?v7 : type=="HullMA"?v8 : type=="LSMA"?v9 : type=="ALMA"?v10 : type=="TMA"?v11: type=="SSMA"?v12: v1
+
+//* Security Wrapper for Alternate Resolution *//
+reso(exp, use, res, t_id) => use ? security(t_id, res, exp, gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on) : exp
+
+calcLongT(t_id) =>
+    closeSeries     = variant(basisType, close[delayOffset], basisLen, offsetSigma, offsetALMA)
+    openSeries      = variant(basisType, open[delayOffset], basisLen, offsetSigma, offsetALMA)
+    closeSeriesAlt = reso(closeSeries, useRes, stratRes, t_id)
+    openSeriesAlt = reso(openSeries, useRes, stratRes, t_id)
+    longTrigger = false
+    longTrigger := cross(closeSeriesAlt, openSeriesAlt) and closeSeriesAlt > openSeriesAlt
+    // rsiobv = na
+    // rsiobv := rsi(obv, rsiP)
+    // histB_IsUp = hist > hist[1] and hist <= 0 //Histrogram ticket up and below 0
+    // macdND = macd < 0 and macd < macd[1] and macd < signal //macdNegativeDowntrend
+    // macdBullDivN = macdND and histB_IsUp //macd in negative downtrend and histo tick up = lime 
+    // longTrigger = false
+    // longTrigger := rsiobv <= 30 and rsi2 <= 10 and rsi5 <= 20 and rsi14 <= 30 //and macdBullDivN
+
+calcShortT(t_id) =>
+    closeSeries     = variant(basisType, close[delayOffset], basisLen, offsetSigma, offsetALMA)
+    openSeries      = variant(basisType, open[delayOffset], basisLen, offsetSigma, offsetALMA)
+    closeSeriesAlt = reso(closeSeries, useRes, stratRes, t_id)
+    openSeriesAlt = reso(openSeries, useRes, stratRes, t_id)
+    shortTrigger = false
+    shortTrigger := cross(closeSeriesAlt, openSeriesAlt) and closeSeriesAlt < openSeriesAlt
+    // rsiobv = na
+    // rsiobv := rsi(obv, rsiP)
+    // macdPU = macd >= 0 and macd > macd[1] and macd > signal //macdPositiveUptrend
+    // histA_IsDown = hist < hist[1] and hist > 0 //Histogram ticking down and above 0
+    // macdBearDivP = macdPU and histA_IsDown //macd in positive uptrend and histo tick down = red
+    // shortTrigger = false
+    // shortTrigger := rsiobv >= 70 and rsi2 >= 90 and rsi5 >= 80 and rsi14 >= 70 //and macdBearDivP
+
+XBT_240_L = security("Bitmex:XBTUSD", tPeriod, calcLongT("Bitmex:XBTUSD"))
+XBT_240_S = security("Bitmex:XBTUSD", tPeriod, calcShortT("Bitmex:XBTUSD"))
+plotchar(4.5, char="?", color= XBT_240_S ? red : XBT_240_L ? lime : black, transp=25, location=location.absolute)
+//plotchar(not barstate.isrealtime ? na : 3, title="XBT", location=location.absolute, offset=2, text="XBT", color=black, textcolor=white)
+hline(4, title="XBT", color=gray, linestyle=dotted, linewidth=1)
+alertcondition(XBT_240_L or XBT_240_S, title="XBT L/S Trigger", message="XBT_LS")
+
+ETH_240_L = security("Bitmex:ETHUSD", tPeriod, calcLongT("Bitmex:ETHUSD"))
+ETH_240_S = security("Bitmex:ETHUSD", tPeriod, calcShortT("Bitmex:ETHUSD"))
+plotchar(3.5, char="?", color= ETH_240_S ? red : ETH_240_L ? lime : black, transp=25, location=location.absolute)
+//plotchar(barstate.isrealtime ? 2 : na, title="ETH", location=location.absolute, offset=2, text="ETH", color=black, textcolor=white)
+hline(3, title="ETH", color=gray, linestyle=dotted, linewidth=1)
+alertcondition(ETH_240_L or ETH_240_S, title="ETH L/S Trigger", message="ETH_LS")
+
+ADA_240_L = security("Bitmex:ADAH19", tPeriod, calcLongT("Bitmex:ADAH19"))
+ADA_240_S = security("Bitmex:ADAH19", tPeriod, calcShortT("Bitmex:ADAH19"))
+plotchar(2.5, char="?", color= ADA_240_S ? red : ADA_240_L ? lime : black, transp=25, location=location.absolute)
+//plotchar(barstate.isrealtime ? 1 : na, title="ADA", location=location.absolute, offset=2, text="ADA", color=black, textcolor=white)
+hline(2, title="ADA", color=gray, linestyle=dotted, linewidth=1)
+alertcondition(ADA_240_L or ADA_240_S, title="ADA L/S Trigger", message="ADA_LS")
+
+LTC_240_L = security("Bitmex:LTCH19", tPeriod, calcLongT("Bitmex:LTCH19"))
+LTC_240_S = security("Bitmex:LTCH19", tPeriod, calcShortT("Bitmex:LTCH19"))
+plotchar(1.5, char="?", color= LTC_240_S ? red : LTC_240_L ? lime : black, transp=25, location=location.absolute)
+//plotchar(barstate.isrealtime ? 0 : na, title="LTC", location=location.absolute, offset=2, text="LTC", color=black, textcolor=white)
+hline(1, title="LTC", color=gray, linestyle=dotted, linewidth=1)
+alertcondition(LTC_240_L or LTC_240_S, title="LTC L/S Trigger", message="LTC_LS")
+
+XRP_240_L = security("Bitmex:XRPH19", tPeriod, calcLongT("Bitmex:XRPH19"))
+XRP_240_S = security("Bitmex:XRPH19", tPeriod, calcShortT("Bitmex:XRPH19"))
+plotchar(0.5, char="?", color= XRP_240_S ? red : XRP_240_L ? lime : black, transp=25, location=location.absolute)
+//plotchar(barstate.isrealtime ? -1 : na, title="XRP", location=location.absolute, offset=2, text="XRP", color=black, textcolor=white)
+hline(0, title="XRP", color=gray, linestyle=dotted, linewidth=1)
+alertcondition(XRP_240_L or XRP_240_S, title="XRP L/S Trigger", message="XRP_LS")
+
+EOS_240_L = security("Bitmex:EOSH19", tPeriod, calcLongT("Bitmex:EOSH19"))
+EOS_240_S = security("Bitmex:EOSH19", tPeriod, calcShortT("Bitmex:EOSH19"))
+plotchar(-0.5, char="?", color= EOS_240_S ? red : EOS_240_L ? lime : black, transp=25, location=location.absolute)
+//plotchar(barstate.isrealtime ? -2 : na, title="EOS", location=location.absolute, offset=2, text="EOS", color=black, textcolor=white)
+hline(-1, title="EOS", color=gray, linestyle=dotted, linewidth=1)
+alertcondition(EOS_240_L or EOS_240_S, title="EOS L/S Trigger", message="EOS_LS")
+
+alertcondition((EOS_240_L or EOS_240_S) or (XRP_240_L or XRP_240_S) or (LTC_240_L or LTC_240_S) or (ADA_240_L or ADA_240_S) or (ETH_240_L or ETH_240_S) or (XBT_240_L or XBT_240_S), title="Bitmex L/S Trigger", message="Bitmex_LS")

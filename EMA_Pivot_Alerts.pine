@@ -1,0 +1,119 @@
+//@version=3
+study("EMA and Pivot Alerts v1", overlay=true)
+
+// Inputs Pivot
+leftBars  = input(13)
+rightBars = input(34)
+
+// Inputs EMA
+exponential = input(true, title="Exponential MA")
+src = close
+ma8 = na
+ma8 := exponential ? ema(src, 8) : sma(src, 8)
+ma13 = na
+ma13 := exponential ? ema(src, 13) : sma(src, 13)
+ma21 = na
+ma21 := exponential ? ema(src, 21) : sma(src, 21)
+ma55 = na
+ma55 := exponential ? ema(src, 55) : sma(src, 55)
+ma100 = na
+ma100 := exponential ? ema(src, 100) : sma(src, 100)
+ma200 = na
+ma200 := exponential ? ema(src, 200) : sma(src, 200)
+buy_cond = false
+buy_cond := cross(ma21, ma55) and ma8 > ma13 and ma21 > ma55
+sell_cond = false
+sell_cond := cross(ma21, ma55) and ma8 < ma13 and ma21 < ma55
+golden_cond = false
+golden_cond := cross(ma55, ma100) and ma8 > ma100 and ma13 > ma100 and ma21 > ma100
+death_cond = false
+death_cond := cross(ma100, ma55) and ma8 < ma100 and ma13 < ma100 and ma21 < ma100
+
+// Calculate Pivot Points
+swh = pivothigh(leftBars, rightBars)
+swl = pivotlow(leftBars, rightBars)
+
+swh_cond = not na(swh)
+
+hprice = 0.0
+hprice := swh_cond ? swh : hprice[1]
+
+swl_cond = not na(swl)
+
+lprice = 0.0
+lprice := swl_cond ? swl : lprice[1]
+
+// Signals
+long  = crossover(high, hprice + syminfo.mintick)
+short = crossunder(low, lprice - syminfo.mintick)
+
+last_signal = 0
+
+long_final  = long  and (nz(last_signal[1]) == 0 or nz(last_signal[1]) == -1)
+short_final = short and (nz(last_signal[1]) == 0 or nz(last_signal[1]) == 1)
+
+last_signal := long_final ? 1 : short_final ? -1 : last_signal[1]
+
+// Plotting Pivot
+plotshape(long_final,  style = shape.triangleup,   color = lime,   location = location.abovebar, text = "L")
+plotshape(short_final, style = shape.triangledown, color = red,     location = location.belowbar, text = "S") 
+
+// Plotting EMA
+plotarrow(buy_cond ? 1 : 0, colordown=lime, maxheight=25, minheight=15)
+plotarrow(sell_cond ? -1 : 0, colorup=red, maxheight=25, minheight=15)
+plotshape(golden_cond, style=shape.triangleup, location=location.abovebar, color=lime, text = "G\nC")
+plotshape(death_cond, style=shape.triangledown, location=location.belowbar, color=red, text = "D\nC")
+plot( ma8, color=red, style=line, title="8", linewidth=1)
+plot( ma13, color=orange, style=line, title="13", linewidth=1)
+plot( ma21, color=yellow, style=line, title="21", linewidth=1)
+plot( ma55, color=lime, style=line, title="55", linewidth=1)
+plot( ma100, color=white, style=line, title="100", linewidth=1)
+plot( ma200, color=blue, style=line, title="200", linewidth=1)
+
+// Alerts Pivot
+alertcondition(long_final,  "Pivot Long",  "Pivot Long")
+alertcondition(short_final, "Pivot Short", "Pivot Short")
+
+// Alerts EMA
+alertcondition(buy_cond, "Buy Condition", "Buy Condition Alert")
+alertcondition(sell_cond, "Sell Condition", "Sell Condition Alert")
+alertcondition(golden_cond, "Golden Cross", "Golden Cross Alert")
+alertcondition(death_cond, "Death Cross", "Death Cross Alert")
+
+// Plot Sell Red flag abovebar when: (DeMark > .7) && (WaveTrend above 53 cross down) && (RSI < 70)
+// Plot Buy Green flag abovebar when: (DeMark < .3) && (WaveTrend crosses up) && (RSI > 70)
+
+//DeMarker Calculations
+per=input(title="DeMarker Period",type=integer,defval=13)
+demax=high>high[1] ? high-high[1] : 0   
+demin=low<low[1] ? low[1]-low : 0
+demax_av=sma(demax,per)
+demin_av=sma(demin,per)
+dmark=demax_av/(demax_av+demin_av)
+dmarkShort = (dmark > 0.7)
+dmarkLong = (dmark < 0.3)
+
+//WaveTrend Calculations
+n1 = input(10, "Channel Length")
+n2 = input(21, "Average Length")
+obLevel1 = input(60, "Over Bought Level 1")
+obLevel2 = input(53, "Over Bought Level 2")
+osLevel1 = input(-60, "Over Sold Level 1")
+osLevel2 = input(-53, "Over Sold Level 2")
+ap = hlc3 \\Is a shortcut for (high + low + close)/3
+esa = ema(ap, n1)
+d = ema(abs(ap - esa), n1)
+ci = (ap - esa) / (0.015 * d)
+tci = ema(ci, n2)
+wt1 = tci
+wt2 = sma(wt1,4)
+wtShort = cross(wt1, wt2) and wt2 - wt1 > 0
+wtLong = cross(wt1, wt2) and wt2 - wt1 < 0
+
+//Plot Calculation
+flagLong = (dmarkLong && wtLong)
+FlagShort = (dmarkShort && wtShort)
+
+plotshape(flagLong, style = shape.flag, color = lime, location = location.belowbar, text="Multi Long")
+plotshape(flagShort, style = shape.flag, color = red, location = location.abovebar, text="Multi Short") 
+

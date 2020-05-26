@@ -1,0 +1,81 @@
+////////////////////////////////////////////////////////////
+//  Copyright by HPotter v1.0 30/06/2014
+// The Polarized Fractal Efficiency (PFE) indicator measures the efficiency 
+// of price movements by drawing on concepts from fractal geometry and chaos 
+// theory. The more linear and efficient the price movement, the shorter the 
+// distance the prices must travel between two points and thus the more efficient 
+// the price movement.
+////////////////////////////////////////////////////////////
+study(title="PFE (Polarized Fractal Efficiency)", shorttitle="PFE (Polarized Fractal Efficiency)")
+Length = input(9, minval=1)
+LengthEMA = input(5, minval=1)
+hline(50, color=green, linestyle=line, title = "TopBand")
+hline(-50, color=red, linestyle=line, title = "LowBand")
+PFE = sqrt(pow(close - close[Length], 2) + 100)
+C2C = sum(sqrt(pow((close - close[1]), 2) + 1), Length)
+xFracEff = iff(close - close[Length] > 0,  round((PFE / C2C) * 100) , round(-(PFE / C2C) * 100))
+xEMA = ema(xFracEff, LengthEMA)
+plot(xEMA, color=blue, title="PFE")
+
+##########################
+// Strategy from HPotter
+strategy(title="PFE (Polarized Fractal Efficiency)", shorttitle="PFE (Polarized Fractal Efficiency)")
+Length = input(9, minval=1)
+LengthEMA = input(5, minval=1)
+BuyBand = input(50, step = 0.1)
+SellBand = input(-50, step = 0.1)
+reverse = input(false, title="Trade reverse")
+hline(BuyBand, color=green, linestyle=line, title = "TopBand")
+hline(SellBand, color=red, linestyle=line, title = "LowBand")
+PFE = sqrt(pow(close - close[Length], 2) + 100)
+C2C = sum(sqrt(pow((close - close[1]), 2) + 1), Length)
+xFracEff = iff(close - close[Length] > 0,  round((PFE / C2C) * 100) , round(-(PFE / C2C) * 100))
+xEMA = ema(xFracEff, LengthEMA)
+pos = iff(xEMA < SellBand, -1,
+	   iff(xEMA > BuyBand, 1, nz(pos[1], 0))) 
+possig = iff(reverse and pos == 1, -1,
+          iff(reverse and pos == -1, 1, pos))	   
+if (possig == 1) 
+    strategy.entry("Long", strategy.long)
+if (possig == -1)
+    strategy.entry("Short", strategy.short)	   	    
+barcolor(possig == -1 ? red: possig == 1 ? green : blue ) 
+plot(xEMA, color=blue, title="PFE")
+
+###########################
+
+study(title="TheLark: Polarized Fractal Efficiency", shorttitle="Lark: PFE", overlay=false)
+// The Polarized Fractal Efficiency indicator is, in the essence, an exponentially smoothed ratio of the length of 
+// two lines: (1) of a straight line between today’s close and the close Period days ago, and 
+// (2) of a broken line connecting all Close points between today and Period days ago. The indicator output 
+// varies between -100 and 100. The theory behind this indicator is that if it is >50 (or <-50) then the market is 
+// likely to reverse its trend from positive to negative (or from negative to positive).
+
+// Other useage: 
+// Securities with a PFE greater than zero are deemed to be trending up, while a reading of less 
+// than zero indicates the trend is down. 
+// The strengh of the trend is measured by the position of the PFE relative to the zero line. 
+// As a general rule, the further the PFE value is away from zero, the stronger and more efficient 
+// the given trend is. A PFE value that fluctuates around the zero line could indicate that the supply 
+// and demand for the security are in balance and price may trade sideways.
+
+Length = input(10)
+Smoothing = input(5)
+SingleColor = input(false, title="Single Color?")
+bgcol = input(true, title="Color Background?")
+
+// Calcs
+ln = Length - 1
+diff = close - close[ln]
+pfetmp = 100 * sqrt(pow(diff,2) + pow(Length,2)) / sum(sqrt(1 + pow(close - close[1],2)), Length - 1)
+pfe = ema( diff > 0 ? pfetmp : -pfetmp, Smoothing)
+
+// Plots
+col = pfe > 50 or pfe < -50 ? #FF8D6F : #FFD9CF
+plot(pfe, color=SingleColor ? #FFD9CF : col,linewidth=1)
+
+hline(50, color=#FFD105, linestyle=dotted)
+hline(-50, color=#FFD105, linestyle=dotted)
+hline(0, color=#FFD105, linestyle=dotted)
+
+bgcolor(bgcol ? col : na)

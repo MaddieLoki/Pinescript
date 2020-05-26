@@ -1,0 +1,58 @@
+//@version=3
+//Script snipets & inspiration from Dr Elder and HarryPotter
+//Edited by Henri Cormier
+study(title="[HC] Indicator: Elder Bull Bear", shorttitle="[HC] Elder Bull Bear", overlay=false)
+src = close, 
+len2 = input(2, minval=1, title="RSI Length 2")
+len5 = input(7, minval=1, title="RSI Length 7")
+len14 = input(14, minval=1, title="RSI Length 14")
+rsi2 = rsi(close, len2)
+rsi5 = rsi(close, len5)
+rsi14 = rsi(close, len14)
+
+//* Edler Bull Bear *//
+Length = input(13, minval=1)
+xPrice = close
+xMA = ema(xPrice,Length)
+DayHigh = na
+DayHigh := iff(dayofmonth != dayofmonth[1], high, max(high, nz(DayHigh[1])))
+nResDH = na
+nResDH := DayHigh - xMA
+DayLow = na
+DayLow := iff(dayofmonth != dayofmonth[1], low, min(low, nz(DayLow[1])))
+nResDL = na
+nResDL := DayLow - xMA
+plot(nResDH, color=lime, title="Bull Power", style=columns)
+plot(nResDL, color=red, title="Bear Power", style=columns)
+DHu0 = na
+DHu0 := nResDH <= 0 and nResDL <= 0
+DLu0 = na
+DLu0 := nResDH >= 0 and nResDL >= 0
+plot(DHu0 ? nResDH:na, color=yellow, title="DH under 0", style=columns)
+plot(DLu0 ? nResDL:na, color=blue, title="DH under 0", style=columns)
+bgcolor(DHu0 ? lime  : black, transp=85)
+bgcolor(DLu0 ? red : black, transp=85)
+
+alertcondition(not DHu0[1] and DHu0, title="Elder Long", message="Elder Long")
+alertcondition(not DLu0[1] and DLu0, title="Elder Short", message="Elder Short")
+
+//band2 = hline(2, title="BU2", linestyle=dotted, linewidth=1, color=gray)
+band0 = hline(0, title="BU0", linestyle=dotted, linewidth=1, color=gray)
+//bandN2 = hline(-2, title="BUN2", linestyle=dotted, linewidth=1, color=gray)
+
+//* Elder Market Thermometer *//
+lengthMA=input(22, "EMA Length")
+explosiveMktThreshold=input(3, title="Explosive Market Threshold")
+idleMarketThreshold=input(7, title="Idle Market Threshold")
+
+emt = na
+emt := iff (high<high[1] and low>low[1], 0, iff ((high - high[1]) > (low[1] - low), abs(high - high[1]), abs(low[1] - low)))
+aemt = na
+aemt := ema(emt, lengthMA)
+qc = na
+qc := aemt > emt ? nz(qc[1])+1:0
+cemt =na
+cemt := (emt < aemt) ? qc > idleMarketThreshold ? green : blue : ((emt > aemt) and (emt < aemt*explosiveMktThreshold)) ? orange : red
+
+plotshape(emt ? true : na, title="Elder Market Thermometer", style=shape.circle, location=location.top, color=cemt)
+

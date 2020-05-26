@@ -1,0 +1,332 @@
+//@version=3
+study(title = "[HC] Study: SAR Elder Bull Bear", shorttitle = "[HC] Study SAR Elder Bull Bear", overlay = true)
+
+src = close
+
+showMA13 = input(title="Show MA13?", type=bool, defval=true) // * Plot Moving Averages * //
+showMA21 = input(title="Show MA21?", type=bool, defval=true) // * Plot Moving Averages * //
+showMA55 = input(title="Show MA55?", type=bool, defval=true) // * Plot Moving Averages * //
+showMA89 = input(title="Show MA89?", type=bool, defval=true) // * Plot Moving Averages * //
+showMA200 = input(title="Show MA200?", type=bool, defval=true) // * Plot Moving Averages * //
+showPosition = input(title="Show Position Levels", type=bool, defval=false) //Display entry, stop loos, take profit lines
+showEntries = input(title="Show Position Entry", type=bool, defval=false) //Display entry, stop loos, take profit lines
+
+//* Simple Moving Averages *//
+maType = input(defval = "EMA", title = "Display Moving Average Type: ", options=["SMA", "EMA", "DEMA", "TEMA", "WMA", "VWMA", "SMMA", "HullMA", "LSMA", "ALMA", "SSMA", "TMA"])
+maOffsetSigma = input(defval = 6, title = "MA Offset for LSMA / Sigma for ALMA", minval = 0)
+maOffsetALMA  = input(defval = 0.85, title = "MA Offset for ALMA", minval = 0, step = 0.01)
+maSelection(type, src, len, maOffSig, maOffALMA) =>
+    v1 = sma(src, len)                                                  // Simple
+    v2 = ema(src, len)                                                  // Exponential
+    v3 = 2 * v2 - ema(v2, len)                                          // Double Exponential
+    v4 = 3 * (v2 - ema(v2, len)) + ema(ema(v2, len), len)               // Triple Exponential
+    v5 = wma(src, len)                                                  // Weighted
+    v6 = vwma(src, len)                                                 // Volume Weighted
+    v7 = 0.0
+    v7 := na(v7[1]) ? sma(src, len) : (v7[1] * (len - 1) + src) / len   // Smoothed
+    v8 = wma(2 * wma(src, len / 2) - wma(src, len), round(sqrt(len)))   // Hull
+    v9 = linreg(src, len, maOffSig)                                     // Least Squares
+    v10 = alma(src, len, maOffALMA, maOffSig)                           // Arnaud Legoux
+    v11 = sma(v1,len)                                                   // Triangular (extreme smooth)
+    // SuperSmoother filter
+    // © 2013  John F. Ehlers
+    a1 = exp(-1.414*3.14159 / len)
+    b1 = 2*a1*cos(1.414*3.14159 / len)
+    c2 = b1
+    c3 = (-a1)*a1
+    c1 = 1 - c2 - c3
+    v12 = 0.0
+    v12 := c1*(src + nz(src[1])) / 2 + c2*nz(v12[1]) + c3*nz(v12[2])
+    type=="EMA"?v2 : type=="DEMA"?v3 : type=="TEMA"?v4 : type=="WMA"?v5 : type=="VWMA"?v6 : type=="SMMA"?v7 : type=="HullMA"?v8 : type=="LSMA"?v9 : type=="ALMA"?v10 : type=="TMA"?v11: type=="SSMA"?v12: v1
+
+ma13 = na
+ma13 := maSelection(maType, close, 13, maOffsetSigma, maOffsetALMA) //sma(src, 13)
+ma21 = na
+ma21 := maSelection(maType, close, 21, maOffsetSigma, maOffsetALMA) //sma(src, 21)
+ma55 = na
+ma55 := maSelection(maType, close, 55, maOffsetSigma, maOffsetALMA) //sma(src, 55)
+ma89 = na
+ma89 := maSelection(maType, close, 89, maOffsetSigma, maOffsetALMA) //sma(src, 89)
+ma200 = na
+ma200 := maSelection(maType, close, 200, maOffsetSigma, maOffsetALMA) //sma(src, 200)
+plot(showMA13 ? ma13 : na, color=red, transp=0, style=line, title="MA13", linewidth=1)
+plot(showMA21 ? ma21 : na, color=yellow, transp=0, style=line, title="MA21", linewidth=1)
+plot(showMA55 ? ma55 : na, color=lime, transp=0, style=line, title="MA55", linewidth=1)
+plot(showMA89 ? ma89 : na, color=aqua, transp=0, style=line, title="MA89", linewidth=1)
+plot(showMA200 ? ma200 : na, color=purple, transp=0, style=line, title="MA200", linewidth=1)
+
+
+//* DeMarker *//
+per=input(title="Period",type=integer,defval=55)
+demax=high>high[1] ? high-high[1] : 0   
+demin=low<low[1] ? low[1]-low : 0
+demax_av=sma(demax,per)
+demin_av=sma(demin,per)
+dmark=demax_av/(demax_av+demin_av)
+//bgcolor(dmark >= 0.79 ? red : dmark <= 0.19 ? lime : black, transp=65)
+
+//* SAR *//
+start = input(2, minval=0, maxval=10, title="Start - Default = 2 - Multiplied by .01")
+increment = input(2, minval=0, maxval=10, title="Step Setting (Sensitivity) - Default = 2 - Multiplied by .01" )
+maximum = input(2, minval=1, maxval=10, title="Maximum Step (Sensitivity) - Default = 2 - Multiplied by .10")
+sus = input(true, "Show Up Trending Parabolic Sar")
+sds = input(true, "Show Down Trending Parabolic Sar")
+disc = input(false, title="Start and Step settings are *.01 so 2 = .02 etc, Maximum Step is *.10 so 2 = .2")
+//"------Step Setting Definition------"
+//"A higher step moves SAR closer to the price action, which makes a reversal more likely."
+//"The indicator will reverse too often if the step is set too high."
+
+//"------Maximum Step Definition-----")
+//"The sensitivity of the indicator can also be adjusted using the Maximum Step."
+//"While the Maximum Step can influence sensitivity, the Step carries more weight"
+//"because it sets the incremental rate-of-increase as the trend develops"
+
+startCalc = start * .01
+incrementCalc = increment * .01
+maximumCalc = maximum * .10
+
+sarUp = sar(startCalc, incrementCalc, maximumCalc)
+sarDown = sar(startCalc, incrementCalc, maximumCalc)
+
+colUp = close >= sarDown ? lime : na
+colDown = close <= sarUp ? red : na
+
+plot(sus and sarUp ? sarUp : na, title="Up Trending SAR", style=circles, linewidth=1,color=colUp)
+plot(sds and sarDown ? sarDown : na, title="Down Trending SAR", style=circles, linewidth=1,color=colDown)
+
+//* Elder Bull Bear *//
+Length = input(7, title="Elder BeP BuP Length", minval=1) //Default was 13
+xPrice = close
+xMA = ema(xPrice,Length)
+DayHigh = na
+DayHigh := iff(dayofmonth != dayofmonth[1], high, max(high, nz(DayHigh[1])))
+nResDH = na
+nResDH := DayHigh - xMA
+DayLow = na
+DayLow := iff(dayofmonth != dayofmonth[1], low, min(low, nz(DayLow[1])))
+nResDL = na
+nResDL := DayLow - xMA
+DHu0 = na
+DHu0 := nResDH <= 0 and nResDL <= 0
+DLu0 = na
+DLu0 := nResDH >= 0 and nResDL >= 0
+
+//* ATR Super Trend *//
+// //Inputs
+// Factor = input(title="Super Trend", defval=3, minval=1,maxval = 100)
+// ATR = input(title="ATR", defval=7, minval=1,maxval = 100)
+// RSI = input(title="RSI", defval=7, minval=1, maxval = 100)
+// //Super Trend ATR
+// Up = hl2-(Factor*atr(ATR))
+// Dn = hl2+(Factor*atr(ATR))
+// TUp = na
+// TUp := close[1]>TUp[1]? max(Up,TUp[1]) : Up
+// TDown = na
+// TDown := close[1]<TDown[1]? min(Dn,TDown[1]) : Dn
+// Trend = na
+// Trend := close > TDown[1] ? 1: close< TUp[1]? -1: nz(Trend[1],1)
+// Tsl = na
+// Tsl := Trend==1? TUp: TDown
+// linecolor = na
+// linecolor := Trend == 1 ? green : red
+// ep = 2 * RSI - 1
+// auc = ema( max( src - src[1], 0 ), ep )
+// adc = ema( max( src[1] - src, 0 ), ep )
+// x1 = (RSI - 1) * ( adc * 70 / (100-70) - auc)
+// ub = iff( x1 >= 0, src + x1, src + x1 * (100-70)/70 )
+// x2 = (RSI - 1) * ( adc * 30 / (100-30) - auc)
+// lb = iff( x2 >= 0, src + x2, src + x2 * (100-30)/30 )
+// //plot(avg(ub, lb), color=purple, style = line, linewidth=1, title="RSI")
+// //plot(Tsl, color = linecolor , style = line , linewidth = 2,title = "SuperTrend ATR", transp=1)
+
+//* RBD (Rally Base Drop) & DBR (Drop Base Rally) Candle Colors *//
+cR = (close - open) >= 0 ? ((close - open) / (high - low))*100 > 50 ? true : false : na //Rally Candle
+cB = (abs(close - open) / (high - low))*100 < 50 ? true : false //Base Candle
+cD = (open - close) >= 0 ? ((open - close) / (high - low))*100 > 50 ? true : false : na //Drop Candle 
+limeBar = cR
+whiteBar = (cR[1] and cB) or (cD[1] and cB)
+redBar = cD
+barcolor(limeBar ? lime : na)
+barcolor(whiteBar ? white : na)
+barcolor(redBar ? red : na)
+
+// * TD Level Points * //
+TDSP1 = high < high[1] and high[1] > high[2]
+TDSP2 = high < high[1] and high[1] < high[2] and high[2] > high[3] and high[3] > high[4]
+TDSP3 = high < high[1] and high[1] < high[2] and high[2] < high[3] and high[3] > high[4] and high[4] > high[5] and high[5] > high[6]
+TDDP1 = low > low[1] and low[1] < low[2]
+TDDP2 = low > low[1] and low[1] > low[2] and low[2] < low[3] and low[3] < low[4]
+TDDP3 = low > low[1] and low[1] > low[2] and low[2] > low[3] and low[3] < low[4] and low[4] < low[5] and low[5] < low[6]
+plotshape(TDSP3 ? TDSP3 : na, title= "TDSP3", color=yellow, transp=40, size=size.tiny, style=shape.cross, location=location.abovebar, offset=-3)
+plotshape(TDDP3 ? TDDP3 : na, title= "TDDP3", color=yellow, transp=40, size=size.tiny, style=shape.cross, location=location.belowbar, offset=-3)
+plotshape(TDSP2 ? TDSP2 : na, title= "TDSP2", color=yellow, transp=80, size=size.tiny, style=shape.cross, location=location.abovebar, offset=-4)
+plotshape(TDDP2 ? TDDP2 : na, title= "TDDP2", color=yellow, transp=80, size=size.tiny, style=shape.cross, location=location.belowbar, offset=-4)
+
+//* Elder Bands AutoEnvelop *//
+myema = input(7, title="Center EMA", minval = 0)
+lookback = input(21, title="Lookback", minval = 0)
+multiplier = input(3.5, title="Multiplier", minval = 0, step = 0.01)
+shortema = input(7, title="Short EMA", minval=1)
+mode = input(title="Use Close?", type=bool, defval=true)
+
+centerline = ema(src, myema)
+myvar = mode == true ? abs(src - centerline) : max(abs(high - centerline), abs(low - centerline))
+myvars = myvar * myvar
+mymov = sqrt(sma(myvars, lookback))
+newmax = max(mymov, max(mymov[1], max(mymov[2], max(mymov[3], max(mymov[4], mymov[5] ) ) ) ) )
+upper = centerline + (newmax * multiplier)
+lower = centerline - (newmax * multiplier)
+
+// MACD Options
+macd_length_fast   = input(defval=6, minval=1, title="MACD Fast Length")
+macd_length_slow   = input(defval=13, minval=1, title="MACD Slow Length")
+macd_length_signal = input(defval=4,  minval=1, title="MACD Signal Length")
+// Calculate MACD
+macd_ma_fast       = ema(src, macd_length_fast)
+macd_ma_slow       = ema(src, macd_length_slow)
+macd               = macd_ma_fast - macd_ma_slow
+macd_signal        = ema(macd, macd_length_signal)
+macd_histogram     = macd - macd_signal
+ema                = ema(src, shortema)
+
+// plot AutoEnvelope
+//plot(centerline, title="Center EMA", color=white, linewidth=1, transp=50)
+//plot(ema(src,shortema), title="Short EMA", color=yellow, linewidth=1, transp=1)
+//plot(upper, title="Upper Channel", linewidth=1, color=white, transp=50)
+//plot(lower, title="Lower Channel", linewidth=1, color=white, transp=50)
+
+// Calculate Elder Impulse
+elder_bulls        = (ema[0] > ema[1]) and (macd_histogram[0] > macd_histogram[1])
+elder_bears        = (ema[0] < ema[1]) and (macd_histogram[0] < macd_histogram[1])
+// elder_color        = elder_bulls ? lime : elder_bears ? red : white // If Neither Bulls or Bears Control the Market
+// barcolor(elder_color)
+
+//** Visual Alerts **//
+highBreak = high >= upper and (not elder_bulls) and (not elder_bears)
+lowBreak = low <= lower and (not elder_bulls) and (not elder_bears)
+//plotshape(not highBreak[1] and highBreak ? true : na, title="Up Break of Band", style=shape.triangledown, location=location.top, color=red)
+//plotshape(not lowBreak[1] and lowBreak ? true : na, title="Down Break of Band", style=shape.triangleup, location=location.top, color=lime)
+
+// *** Strategy Long/Short Call Calculation ***
+longEntry = na
+shortEntry = na
+inLongPosition  = na
+inShortPosition = na
+flat  = na
+inLongPosition := longEntry[1] ? true : shortEntry[1] ? false : inLongPosition[1]
+inShortPosition:= shortEntry[1] ? true : longEntry[1] ? false : inShortPosition[1]
+flat := not inLongPosition and not inShortPosition
+
+//bgcolor(DHu0 ? lime  : black, transp=85)
+//bgcolor(DLu0 ? red : black, transp=85)
+longEntry := DHu0//(close >= sarDown) and nResDL[1] <= nResDL // and src > Tsl
+shortEntry := DLu0//(close <= sarUp) and nResDH[1] >= nResDH // and src > Tsl  
+
+//*****  STUDY START *****//
+//Variables declaration
+isLongOpen = false
+isShortOpen = false
+stopLossPercent = input(2,"Stop Loss Percent", step=0.5)
+takeProfitPercent = input(10,"Profit Percent", step=0.5)
+trailStopPercent = input(3.5,"Trailing Stop Percent", step=0.5)
+
+//Order open on previous ticker?
+isLongOpen := nz(isLongOpen[1])
+isShortOpen := nz(isShortOpen[1])
+
+//Trailing and Profit variables
+stopTrigger = 0.0
+stopTrigger := na 
+profitTrigger = 0.0
+profitTrigger := na 
+trailTrigger = 0.0
+trailTrigger := na
+
+//obtain values from last ticker
+entryPrice=0.0
+entryPrice:= nz(entryPrice[1])
+stopLossLevel=0.0
+stopLossLevel:=nz(stopLossLevel[1])
+profitPriceLevel=0.0
+profitPriceLevel:=nz(profitPriceLevel[1])
+trailPriceLevel=0.0
+trailPriceLevel:=nz(trailPriceLevel[1])
+    
+//If in active trade, lets load with current value    
+if(isLongOpen )
+    profitTrigger := profitPriceLevel ? high : na
+    trailTrigger := trailPriceLevel ? high : na
+    stopTrigger :=  stopLossLevel ? low : na //was ohlc4 changed to low
+if(isShortOpen )
+    profitTrigger := profitPriceLevel ? low : na
+    trailTrigger := trailPriceLevel ? low : na
+    stopTrigger :=  stopLossLevel ? high : na //was ohlc4 changed to high
+
+isStopLoss = isLongOpen ? stopTrigger < stopLossLevel : (isShortOpen ? stopTrigger > stopLossLevel : na )
+isProfitCatch = isLongOpen ? profitTrigger > profitPriceLevel : (isShortOpen ? profitTrigger < profitPriceLevel : na )
+isTrailStop = isLongOpen ? trailTrigger > trailPriceLevel : (isShortOpen ? trailTrigger < trailPriceLevel : na)
+
+//Upon Entry, do this.
+if((longEntry and not inLongPosition) or (shortEntry and not inShortPosition))
+    entryPrice:=close //was ohlc4 changed to close
+
+//set price points for new orders
+if longEntry
+    stopLossLevel := (1 - 0.01 * stopLossPercent) * entryPrice
+    profitPriceLevel := (1 + 0.01 * takeProfitPercent) * entryPrice
+    trailPriceLevel := (1 + 0.01 * trailStopPercent) * entryPrice
+if shortEntry
+    stopLossLevel := (1 + 0.01 * stopLossPercent) * entryPrice
+    profitPriceLevel :=(1 - 0.01 * takeProfitPercent) * entryPrice
+    trailPriceLevel := (1 - 0.01 * trailStopPercent) * entryPrice
+
+//Just some high/low marker for info
+highest=0.0
+highest := high > highest[1] and entryPrice ? high : nz(highest[1])
+
+lowest=0.0
+lowest := (low < lowest[1] or lowest[1]==0.0 ) and entryPrice ? low : nz(lowest[1])
+
+shortExit = isShortOpen[1] and (isStopLoss or isProfitCatch or isTrailStop or longEntry)
+longExit = isLongOpen[1] and (isStopLoss or  isProfitCatch or isTrailStop or shortEntry)
+
+if (longExit or shortExit) and not (longEntry or shortEntry)
+    stopTrigger:=na
+    profitTrigger:=na
+    trailTrigger:=na
+    entryPrice:=na
+    stopLossLevel:=na
+    profitPriceLevel:=na
+    trailPriceLevel:=na
+    highest:=na
+    lowest:=na
+    inLongPosition:=na
+    inShortPosition:=na
+    
+//If the value changed to invoke a buy, lets set it before we leave
+isLongOpen := longEntry  ? true : (longExit == true ? false : isLongOpen)
+isShortOpen := shortEntry ? true : (shortExit == true ? false : isShortOpen)
+
+plotshape(showEntries ? longEntry and (inShortPosition or flat) : na, style = shape.triangleup, size=size.tiny, color = lime, location = location.belowbar)
+plotshape(showEntries ? shortEntry and (inLongPosition or flat) : na, style = shape.triangledown, size=size.tiny, color = red, location = location.abovebar) 
+
+plotchar(showPosition ? entryPrice ? entryPrice : na : na, title= "Entry Level", color=white,  char="-", location=location.absolute)
+plotchar(showPosition ? stopLossLevel ? stopLossLevel : na : na, title= "Stop Loss Level", color=red,  char="-", location=location.absolute)
+plotchar(showPosition ? profitPriceLevel ? profitPriceLevel : na : na, title= "Profit Level", color=lime, char="-", location=location.absolute)
+plotchar(showPosition ? trailPriceLevel ? trailPriceLevel : na : na, title= "Trail Stop Level", color=aqua, char="-", location=location.absolute)
+
+//plotshape(profitTrigger[1] ? isProfitCatch : na, title="Profit Exit Triggered", style=shape.circle, location=location.top, color=lime, transp=25, size=size.small)
+plotshape(showPosition ? inLongPosition[1] and trailTrigger[1] ? isTrailStop : na : na, title="Trail Stop Exit Triggered", style=shape.circle, location=location.abovebar, color=aqua, transp=25, size=size.tiny)
+plotshape(showPosition ? inShortPosition[1] and trailTrigger[1] ? isTrailStop : na : na, title="Trail Stop Exit Triggered", style=shape.circle, location=location.belowbar, color=aqua, transp=25, size=size.tiny)
+plotshape(showPosition ? inLongPosition[1] and stopTrigger[1] ? isStopLoss : na : na, title="Stop Loss Triggered", style=shape.circle, location=location.belowbar, color=red, transp=25, size=size.tiny)
+plotshape(showPosition ? inShortPosition[1] and stopTrigger[1] ? isStopLoss : na : na, title="Stop Loss Triggered", style=shape.circle, location=location.abovebar, color=red, transp=25, size=size.tiny)
+//*****  STUDY END *****//
+
+//*****  ALERTS START *****// 
+alertcondition(longEntry or shortEntry, title="Long/Short Triggered", message="L/S")
+alertcondition(longEntry, title="Buy", message="Long")
+alertcondition(shortEntry, title="Sell", message="Sell")
+alertcondition(isStopLoss, title="Stop Loss", message="Stop Loss")
+alertcondition(isTrailStop and inLongPosition, title="Trail Stop Long", message="Trail Stop Long")
+alertcondition(isTrailStop and inShortPosition, title="Trail Stop Short", message="Trail Stop Short")
+//*****  ALERTS END *****// 

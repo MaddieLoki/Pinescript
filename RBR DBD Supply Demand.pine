@@ -1,0 +1,41 @@
+//* RBR DBD Supply/Demand *//
+cR = (close - open) >= 0 ? ((close - open) / (high - low))*100 > 50 ? true : false : na //Rally Candle
+cB = (abs(close - open) / (high - low))*100 < 50 ? true : false //Base Candle
+cD = (open - close) >= 0 ? ((open - close) / (high - low))*100 > 50 ? true : false : na //Drop Candle 
+
+limeBar = cR
+whiteBar = (cR[1] and cB) or (cD[1] and cB)
+redBar = cD
+
+barcolor(limeBar ? lime : na)
+barcolor(whiteBar ? white : na)
+barcolor(redBar ? red : na)
+
+//BRB -> Buy Continuation
+RBR = (atr(5) > 25) and (cR[2] and cB[1] and cR) and 
+          (cR and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (volume[1] < volume) 
+          
+//DBD -> Sell Continuation
+DBD = (atr(5) > 25) and (cD[2] and cB[1] and cD) 
+          and (cD and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (volume[1] < volume) 
+          
+//DBR -> Buy Reversal
+DBR = (atr(5) > 25) and (cD[2] and cB[1] and cR) and 
+          (cR and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (high > hl2[2]) and (low > low[1]) and (low[1] < low[2])
+          
+//RBD -> Sell Reversal
+RBD = (atr(5) > 25) and (cR[2] and cB[1] and cD) and 
+          (cD and (open > low[1] and open < high[1])) and 
+          (close[2] < high[1] and close[2] > low[1]) and 
+          (low < hl2[2]) and (high < high[1]) and (high[1] > high[2])
+
+plotshape(RBR, style=shape.labelup, location=location.belowbar, offset=-1, color=lime, textcolor=white, text = "R\nB\nR") //Buy Continuation
+plotshape(DBD, style=shape.labeldown, location=location.abovebar, offset=-1, color=red, textcolor=white, text = "D\nB\nD") //Sell Continuation
+plotshape(DBR, style=shape.labelup, location=location.belowbar, offset=-1, color=green, textcolor=white, text = "D\nB\nR") //Buy Reversal
+plotshape(RBD, style=shape.labeldown, location=location.abovebar, offset=-1, color=maroon, textcolor=white, text = "R\nB\nD") //Sell Reversal

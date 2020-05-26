@@ -1,0 +1,28 @@
+//@version=3
+study("RSI + RVGI")
+plot(rsi(close,14)/200)
+
+h0 = hline(0.35)
+h1 = hline(0.15)
+
+//---------------------------------------------------
+
+p=14
+
+CO=close-open
+HL=high-low
+
+value1 = (CO + 2*CO[1] + 2*CO[2] + CO[3])/6
+value2 = (HL + 2*HL[1] + 2*HL[2] + HL[3])/6
+
+num=sum(value1,p)
+denom=sum(value2,p)
+
+RVI=denom!=0?num/denom:0
+
+RVIsig=(RVI+ 2*RVI[1] + 2*RVI[2] + RVI[3])/6
+
+plot(RVI,color=blue,style=line,linewidth=1)
+plot(RVIsig,color=orange,style=line,linewidth=1)
+
+h2 = hline(0)

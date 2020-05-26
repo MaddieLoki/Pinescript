@@ -1,0 +1,66 @@
+//
+// @author LazyBear
+// Edited by HeCormier
+// If you use this code in its original/modified form, do drop me a note. 
+//
+
+study(title = "[HC] Volume Flow Indicator", shorttitle="[HC] VFI")
+
+length = input(130, title="VFI length")
+coef = input(0.2)
+vcoef = input(2.5, title="Max. vol. cutoff")
+signalLength=input(5)
+smoothVFI=input(false, type=bool)
+
+ma(x,y) => smoothVFI ? sma(x,y) : x
+
+typical=hlc3
+inter = log( typical ) - log( typical[1] )
+vinter = stdev(inter, 30 )
+cutoff = coef * vinter * close
+vave = sma( volume, length )[1]
+vmax = vave * vcoef
+vc = iff(volume < vmax, volume, vmax) //min( volume, vmax )
+mf = typical - typical[1]
+vcp = iff( mf > cutoff, vc, iff ( mf < -cutoff, -vc, 0 ) )
+
+vfi = ma(sum( vcp , length )/vave, 3)
+vfima=ema( vfi, signalLength )
+d=vfi-vfima
+
+plot(0, color=gray, style=3)
+showHisto=input(false, type=bool)
+plot(showHisto ? d : na, style=histogram, color=gray, linewidth=3, transp=50)
+plot( vfima , title="EMA of vfi", color=orange)
+plot( vfi, title="vfi", color=green,linewidth=2)
+
+// *** Divergence START ***
+f_top_fractal(_src)=>_src[4] < _src[2] and _src[3] < _src[2] and _src[2] > _src[1] and _src[2] > _src[0]
+f_bot_fractal(_src)=>_src[4] > _src[2] and _src[3] > _src[2] and _src[2] < _src[1] and _src[2] < _src[0]
+f_fractalize(_src)=>f_top_fractal(_src) ? 1 : f_bot_fractal(_src) ? -1 : 0
+
+rsi_high = rsi(high, length)
+rsi_low = rsi(low, length)
+fractal_top_rsi = f_fractalize(rsi_high) > 0 ? rsi_high[2] : na
+fractal_bot_rsi = f_fractalize(rsi_low) < 0 ? rsi_low[2] : na
+
+rsi_high_prev = valuewhen(fractal_top_rsi, rsi_high[2], 1) 
+rsi_high_price = valuewhen(fractal_top_rsi, high[2], 1)
+rsi_low_prev = valuewhen(fractal_bot_rsi, rsi_low[2], 1) 
+rsi_low_price = valuewhen(fractal_bot_rsi, low[2], 1)
+
+regular_bearish_div = fractal_top_rsi and high[2] > rsi_high_price and rsi_high[2] < rsi_high_prev
+hidden_bearish_div = fractal_top_rsi and high[2] < rsi_high_price and rsi_high[2] > rsi_high_prev
+regular_bullish_div = fractal_bot_rsi and low[2] < rsi_low_price and rsi_low[2] > rsi_low_prev
+hidden_bullish_div = fractal_bot_rsi and low[2] > rsi_low_price and rsi_low[2] < rsi_low_prev
+
+plotshape(title='+RBD', series=regular_bearish_div ? rsi_high[2] : na, text='R\n?', style=shape.labeldown, location=location.absolute, color=maroon, textcolor=white, offset=-2)
+plotshape(title='+HBD', series=hidden_bearish_div ? rsi_high[2] : na, text='H\n?', style=shape.labeldown, location=location.absolute, color=maroon, textcolor=white, offset=-2)
+plotshape(title='-RBD', series=regular_bullish_div ? rsi_low[2] : na, text='?\nR', style=shape.labelup, location=location.absolute, color=green, textcolor=white, offset=-2)
+plotshape(title='-HBD', series=hidden_bullish_div ? rsi_low[2] : na, text='?\nH', style=shape.labelup, location=location.absolute, color=green, textcolor=white, offset=-2)
+// *** Divergence END ***
+
+//*****  ALERTS START *****// 
+alertcondition(regular_bullish_div or hidden_bullish_div, title="RSI Bull Div", message="RSI Bull Div")
+alertcondition(regular_bearish_div or hidden_bearish_div, title="RSI Bear Div", message="RSI Bear Div")
+//*****  ALERTS END *****// 

@@ -1,0 +1,416 @@
+//@version=3
+study("[HC] ALT/USDT Study v1", overlay=true)
+
+src = close
+
+//*** Divergence Start ***
+//  ||  General Input:
+method = input(title='Method (0=rsi, 3=volume, 4=acc/dist, 6=cci):', type=integer, defval=0, minval=0, maxval=6)
+SHOW_LABEL = true
+SHOW_CHANNEL = false
+uHid = true
+uReg = true
+rsi_smooth = 7
+
+//  ||  Functions:
+f_top_fractal(_src)=>_src[4] < _src[2] and _src[3] < _src[2] and _src[2] > _src[1] and _src[2] > _src[0]
+f_bot_fractal(_src)=>_src[4] > _src[2] and _src[3] > _src[2] and _src[2] < _src[1] and _src[2] < _src[0]
+f_fractalize(_src)=>f_top_fractal(_src) ? 1 : f_bot_fractal(_src) ? -1 : 0
+
+//  ||••>   START ACC/DIST FUNCTION
+f_accdist(_smooth)=>_return=sma(cum(close==high and close==low or high==low ? 0 : ((2*close-low-high)/(high-low))*volume), _smooth)
+//  ||<••   END ACC/DIST FUNCTION
+
+method_high = method == 0 ? rsi(high, rsi_smooth) : 
+  method == 3 ? sma(volume, rsi_smooth) :
+  method == 4 ? f_accdist(rsi_smooth) :
+  method == 6 ? cci(high, rsi_smooth) :
+  na
+    
+method_low = method == 0 ? rsi(low, rsi_smooth) :
+  method == 3 ? sma(volume, rsi_smooth) :
+  method == 4 ? f_accdist(rsi_smooth) :
+  method == 6 ? cci(low, rsi_smooth) :
+  na
+
+fractal_top = f_fractalize(method_high) > 0 ? method_high[2] : na
+fractal_bot = f_fractalize(method_low) < 0 ? method_low[2] : na
+high_prev = valuewhen(fractal_top, method_high[2], 1) 
+high_price = valuewhen(fractal_top, high[2], 1)
+low_prev = valuewhen(fractal_bot, method_low[2], 1) 
+low_price = valuewhen(fractal_bot, low[2], 1)
+regular_bearish_div = fractal_top and high[2] > high_price and method_high[2] < high_prev
+hidden_bearish_div = fractal_top and high[2] < high_price and method_high[2] > high_prev
+regular_bullish_div = fractal_bot and low[2] < low_price and method_low[2] > low_prev
+hidden_bullish_div = fractal_bot and low[2] > low_price and method_low[2] < low_prev
+plot(title='H F', series=fractal_top ? high[2] : na, color=regular_bearish_div or hidden_bearish_div ? maroon : not SHOW_CHANNEL ? na : silver, offset=-2)
+plot(title='L F', series=fractal_bot ? low[2] : na, color=regular_bullish_div or hidden_bullish_div ? green : not SHOW_CHANNEL ? na : silver, offset=-2)
+plot(title='H D', series=fractal_top ? high[2] : na, style=circles, color=regular_bearish_div or hidden_bearish_div ? maroon : not SHOW_CHANNEL ? na : silver, linewidth=3, offset=-2)
+plot(title='L D', series=fractal_bot ? low[2] : na, style=circles, color=regular_bullish_div or hidden_bullish_div ? green : not SHOW_CHANNEL ? na : silver, linewidth=3, offset=-2)
+plotshape(title='+RBD', series=not SHOW_LABEL ? na : regular_bearish_div ? high[2] : na, text='R', style=shape.labeldown, location=location.absolute, color=maroon, textcolor=white, offset=-2)
+plotshape(title='+HBD', series=not SHOW_LABEL ? na : hidden_bearish_div ? high[2] : na, text='H', style=shape.labeldown, location=location.absolute, color=maroon, textcolor=white, offset=-2)
+plotshape(title='-RBD', series=not SHOW_LABEL ? na : regular_bullish_div ? low[2] : na, text='R', style=shape.labelup, location=location.absolute, color=green, textcolor=white, offset=-2)
+plotshape(title='-HBD', series=not SHOW_LABEL ? na : hidden_bullish_div ? low[2] : na, text='H', style=shape.labelup, location=location.absolute, color=green, textcolor=white, offset=-2)
+// Inputs
+length = input(144, minval = 10, title = "MMLO Look back Length")
+quad   = input(2, minval = 1, maxval = 4, step = 1, title = "Mininum Quadrant for MMLO Support")
+mult = 0.125
+
+// Donchanin Channel
+hi = highest(high, length)
+lo = lowest(low, length)
+range = hi - lo
+multiplier = (range) * mult
+midline = lo + multiplier * 4
+oscillator = (close - midline)/(range/2)
+a = oscillator > 0
+b = oscillator > 0 and oscillator > mult*2
+c = oscillator > 0 and oscillator > mult*4
+d = oscillator > 0 and oscillator > mult*6
+z = oscillator < 0
+y = oscillator < 0 and oscillator < -mult*2
+x = oscillator < 0 and oscillator < -mult*4
+w = oscillator < 0 and oscillator < -mult*6
+//*** Divergence End ***
+
+//*** Dolchian/Bollinger Hybrid ***
+tf = input(24)
+factor = tf*(syminfo.mintick*10)
+trend = round(hl2/factor)*factor
+smoothtrend = sma(trend, tf)
+band1 = max(smoothtrend-stdev(trend, tf)*(tf*0.125), lowest(tf))
+band2 = min(smoothtrend+stdev(trend, tf)*(tf*0.125), highest(tf))
+//plot(trend)
+plot(smoothtrend, color=orange)
+b1 = plot(band1, color=gray)
+b2 = plot(band2, color=gray)
+fill(b1,b2, color=gray, transp=75)
+
+// RSI with EMA
+len = input(13, minval=1, title="RSI Length")
+len2 = input(55, minval=1, title="EMA of RSI Length")
+up = rma(max(change(src), 0), len)
+down = rma(-min(change(src), 0), len)
+rsi = down == 0 ? 100 : up == 0 ? 0 : 100 - (100 / (1 + up / down))
+emaRSI = ema(rsi,len2)
+
+// Inputs EMA
+DisplayEMA = input(true, title="Display EMA")
+ma8 = na
+ma8 := ema(src, 8)
+ma13 = na
+ma13 := ema(src, 13)
+ma21 = na
+ma21 := ema(src, 21)
+ma55 = na
+ma55 := ema(src, 55)
+ma100 = na
+ma100 := ema(src, 100)
+ma200 = na
+ma200 := ema(src, 200)
+vegas12 = na
+vegas12 := ema(src, 12)
+vegas144 = na
+vegas144 := ema(src, 144)
+vegas169 = na
+vegas169 := ema(src, 169)
+golden_cond = false
+golden_cond := cross(ma55, ma200) and ma8 > ma100 and ma13 > ma100 and ma21 > ma100
+death_cond = false
+death_cond := cross(ma200, ma55) and ma8 < ma100 and ma13 < ma100 and ma21 < ma100
+
+// Plotting EMA
+plotshape(golden_cond, style=shape.triangleup, location=location.belowbar, color=lime, text = "\nG\nX")
+plotshape(death_cond, style=shape.triangledown, location=location.abovebar, color=red, text = "D\nX\n")
+//plot( ma8, color=red, transp=0, style=line, title="8", linewidth=1)
+//plot( ma13, color=orange, transp=0, style=line, title="13", linewidth=1)
+plot( ma21, color=yellow, transp=0, style=line, title="21", linewidth=1)
+plot( ma55, color=lime, transp=0, style=line, title="55", linewidth=1)
+//plot( ma100, color=aqua, transp=0, style=line, title="100", linewidth=1)
+plot( ma200, color=white, transp=0, style=line, title="200", linewidth=1)
+plot( vegas12, color=red, transp=0, style=line, title="vegas12", linewidth=1)
+//plot( vegas144, color=orange, transp=0, style=line, title="vegas144", linewidth=2)
+plot( vegas169, color=maroon, transp=0, style=line, title="vegas169", linewidth=1)
+
+//WaveTrend Calculations
+n1 = input(10, "Channel Length")
+n2 = input(21, "Average Length")
+obLevel2 = input(63, "Over Bought Level 2")
+osLevel2 = input(-63, "Over Sold Level 2")
+ap = hlc3
+esa = ema(ap, n1)
+wtd = ema(abs(ap - esa), n1)
+ci = (ap - esa) / (0.015 * wtd)
+tci = ema(ci, n2)
+wt1 = tci
+wt2 = sma(wt1,4)
+wtShort = wt1 > obLevel2 
+wtLong = wt2 < osLevel2 
+//bgcolor(wtLong ? lime : wtShort ? red : black)
+
+// *** ADX/DI Calculations ***
+lenADXDI = input(title="ADX Length", type=integer, defval=14)
+ADXDIthreshold = input(title="ADX Threshold", type=integer, defval=20)
+TrueRange = max(max(high-low, abs(high-nz(src[1]))), abs(low-nz(src[1])))
+DirectionalMovementPlus = high-nz(high[1]) > nz(low[1])-low ? max(high-nz(high[1]), 0): 0
+DirectionalMovementMinus = nz(low[1])-low > high-nz(high[1]) ? max(nz(low[1])-low, 0): 0
+SmoothedTrueRange = na
+SmoothedTrueRange := nz(SmoothedTrueRange[1]) - (nz(SmoothedTrueRange[1])/lenADXDI) + TrueRange
+SmoothedDirectionalMovementPlus = na
+SmoothedDirectionalMovementPlus := nz(SmoothedDirectionalMovementPlus[1]) - (nz(SmoothedDirectionalMovementPlus[1])/lenADXDI) + DirectionalMovementPlus
+SmoothedDirectionalMovementMinus = na
+SmoothedDirectionalMovementMinus := nz(SmoothedDirectionalMovementMinus[1]) - (nz(SmoothedDirectionalMovementMinus[1])/lenADXDI) + DirectionalMovementMinus
+DIPlus = SmoothedDirectionalMovementPlus / SmoothedTrueRange * 100
+DIMinus = SmoothedDirectionalMovementMinus / SmoothedTrueRange * 100
+DX = abs(DIPlus-DIMinus) / (DIPlus+DIMinus)*100
+ADX = sma(DX, lenADXDI)
+
+// *** CCI Coded OBV ***
+cciobvlength = input(20, minval=1, title="CCI Length")
+cciobvthreshold=input(0, title="CCI threshold for OBV coding")
+cciobvlengthema=input(7, title="cciobv EMA length")
+obv(src) => 
+    cum(change(src) > 0 ? volume : change(src) < 0 ? -volume : 0*volume)
+    
+o=obv(src)
+cciobv_c=cci(src, cciobvlength)
+cciobv_ema = ema(o,cciobvlengthema)
+
+//*** PFE: Polarized Fractal Efficiency ***
+PFE_Length = input(10)
+PFE_Smoothing = input(5)
+ln = PFE_Length - 1
+diff = close - close[ln]
+pfetmp = 100 * sqrt(pow(diff,2) + pow(PFE_Length,2)) / sum(sqrt(1 + pow(close - close[1],2)), PFE_Length - 1)
+pfe = ema( diff > 0 ? pfetmp : -pfetmp, PFE_Smoothing)
+
+// *** VFI: Volume Flow Indicator ***
+vfilength = input(130, title="VFI length")
+coef = input(0.2)
+vcoef = input(2.5, title="Max. vol. cutoff")
+vfiSignalLength=input(5)
+smoothVFI=input(false, type=bool)
+ma(x,y) => smoothVFI ? sma(x,y) : x
+typical=hlc3
+inter = log( typical ) - log( typical[1] )
+vinter = stdev(inter, 30 )
+cutoff = coef * vinter * close
+vave = sma( volume, vfilength )[1]
+vmax = vave * vcoef
+vc = iff(volume < vmax, volume, vmax) //min( volume, vmax )
+mf = typical - typical[1]
+vcp = iff( mf > cutoff, vc, iff ( mf < -cutoff, -vc, 0 ) )
+vfi = ma(sum( vcp , vfilength )/vave, 3)
+vfiema=ema( vfi, vfiSignalLength )
+
+// *** MACD Calculations ***
+fastLength = input(12, minval=1)
+slowLength=input(26,minval=1)
+signalLength=input(9,minval=1)
+fastMA = ema(src, fastLength)
+slowMA = ema(src, slowLength)
+macd = fastMA - slowMA
+signal = sma(macd, signalLength)
+hist = macd - signal
+
+// *** Weighted Volume Moving Avg ***
+fmal=input(2,"First Moving Average length")
+smal=input(7,"Second Moving Average length")
+tmal=fmal+smal
+Fmal=smal+tmal
+Ftmal=tmal+Fmal
+Smal=Fmal+Ftmal
+M1= wma(close, fmal)
+M2= wma(M1, smal)
+M3= wma(M2, tmal)
+M4= wma(M3, Fmal)
+M5= wma(M4, Ftmal)
+MAVW= wma(M5, Smal)
+col1= MAVW>MAVW[1]
+col3= MAVW<MAVW[1]
+color = col1 ? teal : col3 ? fuchsia : yellow
+M12= wma(close, 3)
+M22= wma(M12, 5)
+M32= wma(M22, 8)
+M42= wma(M32, 13)
+M52= wma(M42, 21)
+MAVW2= wma(M52, 34)
+plot(MAVW, color=color, linewidth=1, transp=0, title="MAVW")
+
+//*** Pivot High/Low ***
+leftBars = input(21)
+rightBars=input(13)
+ph = pivothigh(leftBars, rightBars)
+pl = pivotlow(leftBars,rightBars)
+plot(ph, style=cross, linewidth=2, color= yellow, offset=-rightBars)
+plot(pl, style=cross, linewidth=2, color= aqua, offset=-rightBars)
+
+//*** Vegas & Moving Average Volume Weighted Cross ***
+vegas_long = false
+vegas_long := crossover(vegas12, MAVW)
+vegas_short = false
+vegas_short := crossunder(vegas12, MAVW)
+//plotshape(vegas_long, style=shape.labelup, size=size.tiny, location=location.belowbar, textcolor=white, color=green, text = "\nV\nL") 
+//plotshape(vegas_short, style=shape.labeldown, size=size.tiny, location=location.abovebar, textcolor=white, color=red, text = "V\nS\n")
+
+//Signals
+pfeCloseLong = pfe > 0 and pfe[1] > pfe
+pfeCloseShort = pfe < 0 and pfe[1] < pfe
+pfeLong = pfe < -68
+pfeShort = pfe > 50
+ADXOverThreshold = ADX > ADXDIthreshold
+ADXTrending = ADX[3] < ADX[2] and ADX[1] < ADX
+ADXLongTrend = DIPlus > DIMinus and ADXTrending
+ADXShortTrend = DIMinus > DIPlus and ADXTrending
+ADXLong = DIPlus <= 13 and DIMinus >= 55
+ADXShort = DIMinus <= 13 and DIPlus >= 55
+ADXLongCross = crossover(DIPlus, DIMinus)
+ADXShortCross = crossover(DIMinus, DIPlus)
+cciobv_Long = cciobv_c > cciobvthreshold
+cciobv_Short = cciobv_c < cciobvthreshold
+cciobv_TrendLong = cciobv_ema[3] < cciobv_ema[2] and cciobv_ema[2] < cciobv_ema[1] and cciobv_ema[1] < cciobv_ema
+cciobv_TrendShort = cciobv_ema[3] > cciobv_ema[2] and cciobv_ema[2] > cciobv_ema[1] and cciobv_ema[1] > cciobv_ema 
+rsiEmaLong = crossover(rsi, emaRSI)  
+rsiEmaShort = crossunder(emaRSI, rsi)
+rsiEmaTrendLong = emaRSI[2] < emaRSI[1] and emaRSI[1] < emaRSI
+rsiEmaTrendShort = emaRSI[2] > emaRSI[1] and emaRSI[1] > emaRSI
+rsiShort = rsi >= 60
+rsiLong = rsi <= 35
+histA_IsUp = hist > hist[1] and hist > 0 //Histogram ticking up and above 0
+histA_IsDown = hist < hist[1] and hist > 0 //Histogram ticking down and above 0
+histB_IsDown = hist < hist[1] and hist <= 0 //Histgram ticking down and below 0
+histB_IsUp = hist > hist[1] and hist <= 0 //Histrogram ticket up and below 0
+macdPU = macd >= 3 and macd > macd[1] and macd > signal //macdPositiveUptrend
+macdNU = macd < -3 and macd > macd[1] and macd > signal //macdNegativeUptrend
+macdPD = macd >= 3 and macd < macd[1] and macd < signal //macdPositiveDowntrend
+macdND = macd < -3 and macd < macd[1] and macd < signal //macdNegativeDowntrend
+macdBearDivP = macdPU and histA_IsDown //macd in positive uptrend and histo tick down = red
+macdBearDivN = macdNU and histA_IsDown //macd in negative uptrend and histo tick down = yellow
+macdBullDivP = macdPD and histB_IsUp //macd in positive downtrend and histo tick up = aqua
+macdBullDivN = macdND and histB_IsUp //macd in negative downtrend and histo tick up = lime 
+dolchianLong = close <= band1[1]
+dolchianShort = close >= band2[1]
+
+// *** Strategy Long/Short Call Calculation ***
+longEntry = na
+shortEntry = na
+inLongPosition  = na
+inShortPosition = na
+flat  = na
+inLongPosition := longEntry[1] ? true : shortEntry[1] ? false : inLongPosition[1]
+inShortPosition:= shortEntry[1] ? true : longEntry[1] ? false : inShortPosition[1]
+flat := not inLongPosition and not inShortPosition
+
+longEntry := regular_bullish_div or pl
+shortEntry := regular_bearish_div or ph
+
+bgcolor(longEntry ? lime : shortEntry ? red : black)
+
+//*****  STUDY START *****//
+//Variables declaration
+isLongOpen = false
+isShortOpen = false
+stopLossPercent = input(3.5,"Stop Loss Percent")
+takeProfitPercent = input(20,"Profit Percent")
+trailStopPercent = input(2,"Trailing Stop Percent")
+
+//Order open on previous ticker?
+isLongOpen := nz(isLongOpen[1])
+isShortOpen := nz(isShortOpen[1])
+
+//Trailing and Profit variables
+stopTrigger = 0.0
+stopTrigger := na 
+
+profitTrigger = 0.0
+profitTrigger := na 
+
+trailTrigger = 0.0
+trailTrigger := na
+
+//obtain values from last ticker
+entryPrice=0.0
+entryPrice:= nz(entryPrice[1])
+
+stopLossLevel=0.0
+stopLossLevel:=nz(stopLossLevel[1])
+
+profitPriceLevel=0.0
+profitPriceLevel:=nz(profitPriceLevel[1])
+
+trailPriceLevel=0.0
+trailPriceLevel:=nz(trailPriceLevel[1])
+    
+//If in active trade, lets load with current value    
+if(isLongOpen )
+    profitTrigger := profitPriceLevel ? high : na
+    trailTrigger := trailPriceLevel ? high : na
+    stopTrigger :=  stopLossLevel ? ohlc4 : na 
+if(isShortOpen )
+    profitTrigger := profitPriceLevel ? low : na
+    trailTrigger := trailPriceLevel ? low : na
+    stopTrigger :=  stopLossLevel ? ohlc4 : na 
+
+isStopLoss = isLongOpen ? stopTrigger < stopLossLevel : (isShortOpen ? stopTrigger > stopLossLevel : na )
+isProfitCatch = isLongOpen ? profitTrigger > profitPriceLevel : (isShortOpen ? profitTrigger < profitPriceLevel : na )
+isTrailStop = isLongOpen ? trailTrigger > trailPriceLevel : (isShortOpen ? trailTrigger < trailPriceLevel : na)
+
+//Upon Entry, do this.
+if(longEntry or shortEntry)
+    entryPrice:=ohlc4 
+
+//set price points for new orders
+if longEntry
+    stopLossLevel := (1 - 0.01 * stopLossPercent) * entryPrice
+    profitPriceLevel := (1 + 0.01 * takeProfitPercent) * entryPrice
+    trailPriceLevel := (1 + 0.01 * trailStopPercent) * entryPrice
+if shortEntry
+    stopLossLevel := (1 + 0.01 * stopLossPercent) * entryPrice
+    profitPriceLevel :=(1 - 0.01 * takeProfitPercent) * entryPrice
+    trailPriceLevel := (1 - 0.01 * trailStopPercent) * entryPrice
+
+//Just some high/low marker for info
+highest=0.0
+highest := high > highest[1] and entryPrice ? high : nz(highest[1])
+
+lowest=0.0
+lowest := (low < lowest[1] or lowest[1]==0.0 ) and entryPrice ? low : nz(lowest[1])
+
+shortExit = isShortOpen[1] and (isStopLoss or isProfitCatch or isTrailStop or longEntry)
+longExit = isLongOpen[1] and (isStopLoss or  isProfitCatch or isTrailStop or shortEntry)
+
+if (longExit or shortExit) and not (longEntry or shortEntry)
+    stopTrigger:=na
+    profitTrigger:=na
+    trailTrigger:=na
+    entryPrice:=na
+    stopLossLevel:=na
+    profitPriceLevel:=na
+    trailPriceLevel:=na
+    highest:=na
+    lowest:=na
+    inLongPosition:=na
+    inShortPosition:=na
+    
+//If the value changed to invoke a buy, lets set it before we leave
+isLongOpen := longEntry  ? true : (longExit == true ? false : isLongOpen)
+isShortOpen := shortEntry ? true : (shortExit == true ? false : isShortOpen)
+
+plotshape(longEntry and (inShortPosition or flat), style = shape.flag, color = lime, location = location.belowbar, text="\nL\nO\nN\nG")
+plotshape(shortEntry and (inLongPosition or flat), style = shape.flag, color = red, location = location.abovebar, text="S\nH\nO\nR\nT\n") 
+
+plotshape(entryPrice ? entryPrice : na, title= "Entry Level", color=white, style=shape.cross, location=location.absolute)
+plotshape(stopLossLevel ? stopLossLevel : na, title= "Stop Loss Level", color=yellow, style=shape.cross, location=location.absolute)
+plotshape(profitPriceLevel ? profitPriceLevel : na, title= "Profit Level", color=lime, style=shape.cross, location=location.absolute)
+plotshape(trailPriceLevel ? trailPriceLevel : na, title= "Trail Stop Level", color=aqua, style=shape.cross, location=location.absolute)
+plotshape(profitTrigger[1] ? isProfitCatch : na, title="Profit Exit Triggered", style=shape.diamond, location=location.top, color=lime, size=size.small)
+plotshape(inLongPosition[1] and trailTrigger[1] ? isTrailStop : na, title="Trail Stop Exit Triggered", style=shape.diamond, location=location.abovebar, color=aqua, size=size.tiny)
+plotshape(inShortPosition[1] and trailTrigger[1] ? isTrailStop : na, title="Trail Stop Exit Triggered", style=shape.diamond, location=location.belowbar, color=aqua, size=size.tiny)
+plotshape(inLongPosition[1] and stopTrigger[1] ? isStopLoss : na, title="Stop Loss Triggered", style=shape.diamond, location=location.belowbar, color=red, size=size.tiny)
+plotshape(inShortPosition[1] and stopTrigger[1] ? isStopLoss : na, title="Stop Loss Triggered", style=shape.diamond, location=location.abovebar, color=red, size=size.tiny)
+//*****  STUDY END *****//
+
+//*****  ALERTS START *****// 
+alertcondition(longEntry, title="ALT Scalp L", message="ALTScalp Long")
+alertcondition(isTrailStop, title="ALT Scalp TS", message="XBT Scalp TS")
+//*****  ALERTS END *****// 

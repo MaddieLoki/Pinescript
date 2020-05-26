@@ -1,0 +1,301 @@
+//@version=4
+study("TEST", overlay=true)
+
+src_in = input(close, title="Source")
+incompletecandles = input(true, title="Include current unclosed current candle")
+showPosition = input(title="Show Position Marks", type=input.bool, defval=true)  //Display entry, stop loos, take profit lines
+
+// ************************
+// *** Highs & Lows ***
+// ************************
+lenH = input(title="Length High", type=input.integer, defval=34, minval=1)
+lenL = input(title="Length Low", type=input.integer, defval=34, minval=1)
+
+fun(src, len, isHigh, _style, _yloc, _color) =>
+    p = nz(src[len])
+    isFound = true
+    for i = 0 to len - 1
+        if isHigh and src[i] > p
+            isFound := false
+
+        if not isHigh and src[i] < p
+            isFound := false
+
+    for i = len + 1 to 2 * len
+        if isHigh and src[i] >= p
+            isFound := false
+
+        if not isHigh and src[i] <= p
+            isFound := false
+
+    if isFound
+        label.new(bar_index[len], p, tostring(p), style=_style, yloc=_yloc, color=_color)
+
+fun(high, lenH, true, label.style_labeldown, yloc.abovebar, color.lime)
+fun(low, lenL, false, label.style_labelup, yloc.belowbar, color.red)
+
+// ************************
+// *** RSI Calculations ***
+// ************************
+len2 = input(2, minval=1, title="RSI Length 2")
+rsi2 = rsi(src_in, len2)
+len14 = input(14, minval=1, title="RSI Length 14")
+rsi14 = rsi(src_in, len14)
+
+// *******************************
+// *** Stochastic Calculations ***
+// *******************************
+length = input(7, minval=1)
+smoothK = input(3, minval=1)
+smoothD = input(3, minval=1)
+k = sma(stoch(close, high, low, length), smoothK)
+d = sma(k, smoothD)
+
+// *********************
+// *** Forcasted SMA ***
+// *********************
+type = "SMA"
+forecasttype = input(defval="flat", options=["flat", "linreg"], title="MA Forecast Type (flat assumes prices stay the same / linreg does n period LR forecast)")
+linreglen = input(3, title="# of candles to use in linear regression")
+
+show_ma5 = input(true, title="Plot 5 MA")
+len_ma5 = input(5, title="5 MA len_ma5")
+show_ma13 = input(true, title="Plot 13 MA")
+len_ma13 = input(13, title="13 MA len_ma5")
+show_ma21 = input(true, title="Plot 21 MA")
+len_ma21 = input(21, title="21 MA Len")
+show_ma55 = input(true, title="Plot 55 MA")
+len_ma55 = input(55, title="55 MA Len")
+show_ma200 = input(true, title="Plot 200 MA")
+len_ma200 = input(200, title="200 MA Len")
+
+// Need to rework ma forecasts to support alternate MA types
+matype(_type, _src, _len) =>
+    sma_1 = sma(_src, _len)
+    _len == 0 ? _src : _type == "SMA" ? sma_1 : na
+    //  _type=="EMA"?ema(_src,_len):
+    //  _type=="WMA"?wma(_src,_len):
+
+forecast(_type, _src, _flen, _lrlen) =>
+    linreg_1 = linreg(_src, _lrlen, _flen)
+    _type == "flat" ? _src : _type == "linreg" ? linreg_1 : na
+
+ma5_col = color.orange
+ma13_col = color.red
+ma21_col = color.yellow
+ma55_col = color.lime
+ma200_col = color.purple
+
+bar = incompletecandles ? 0 : 1
+src = src_in[bar]
+
+ma5 = matype(type, src, len_ma5)
+ma13 = matype(type, src, len_ma13)
+ma21 = matype(type, src, len_ma21)
+ma55 = matype(type, src, len_ma55)
+ma200 = matype(type, src, len_ma200)
+
+forecast1 = forecast(forecasttype, src, 1, linreglen)
+forecast2 = forecast(forecasttype, src, 2, linreglen)
+forecast3 = forecast(forecasttype, src, 3, linreglen)
+
+matype__1 = matype(type, src, len_ma5 - 1)
+ma5_forecast1 = show_ma5 ? (matype__1 * (len_ma5 - 1) + forecast1) / len_ma5 : na
+matype__2 = matype(type, src, len_ma5- 2)
+ma5_forecast2 = show_ma5 ? (matype__2 * (len_ma5 - 2) + forecast1 + forecast2) / len_ma5 : na
+matype__3 = matype(type, src, len_ma5 - 3)
+ma5_forecast3 = show_ma5 ? (matype__3 * (len_ma5 - 3) + forecast1 + forecast2 + forecast3) / len_ma5 : na
+
+matype__10 = matype(type, src, len_ma13 - 1)
+ma13_forecast1 = show_ma13 ? (matype__10 * (len_ma13 - 1) + forecast1) / len_ma13 : na
+matype__11 = matype(type, src, len_ma13- 2)
+ma13_forecast2 = show_ma13 ? (matype__11 * (len_ma13 - 2) + forecast1 + forecast2) / len_ma13 : na
+matype__12 = matype(type, src, len_ma13 - 3)
+ma13_forecast3 = show_ma13 ? (matype__12 * (len_ma13 - 3) + forecast1 + forecast2 + forecast3) / len_ma13 : na
+
+matype__4 = matype(type, src, len_ma21 - 1)
+ma21_forecast1 = show_ma21 ? (matype__4 * (len_ma21 - 1) + forecast1) / len_ma21 : na
+matype__5 = matype(type, src, len_ma21 - 2)
+ma21_forecast2 = show_ma21 ? (matype__5 * (len_ma21 - 2) + forecast1 + forecast2) / len_ma21 : na
+matype__6 = matype(type, src, len_ma21 - 3)
+ma21_forecast3 = show_ma21 ? (matype__6 * (len_ma21 - 3) + forecast1 + forecast2 + forecast3) / len_ma21 : na
+
+matype__13 = matype(type, src, len_ma55 - 1)
+ma55_forecast1 = show_ma55 ? (matype__13 * (len_ma55 - 1) + forecast1) / len_ma55 : na
+matype__14 = matype(type, src, len_ma55 - 2)
+ma55_forecast2 = show_ma55 ? (matype__14 * (len_ma55 - 2) + forecast1 + forecast2) / len_ma55 : na
+matype__15 = matype(type, src, len_ma55 - 3)
+ma55_forecast3 = show_ma21 ? (matype__15 * (len_ma55 - 3) + forecast1 + forecast2 + forecast3) / len_ma55 : na
+
+matype__7 = matype(type, src, len_ma200 - 1)
+ma200_forecast1 = show_ma200 ? (matype__7 * (len_ma200 - 1) + forecast1) / len_ma200 : na
+matype__8 = matype(type, src, len_ma200 - 2)
+ma200_forecast2 = show_ma200 ? (matype__8 * (len_ma200 - 2) + forecast1 + forecast2) / len_ma200 : na
+matype__9 = matype(type, src, len_ma200 - 3)
+ma200_forecast3 = show_ma200 ? 
+   (matype__9 * (len_ma200 - 3) + forecast1 + forecast2 + forecast3) / len_ma200 : na
+
+plot(show_ma5 ? ma5 : na, color=ma5_col, linewidth=1, transp=0, offset=-1 * bar, title="MA5")
+plot(show_ma13 ? ma13 : na, color=ma13_col, linewidth=1, transp=0, offset=-1 * bar, title="MA13")
+plot(show_ma21 ? ma21 : na, color=ma21_col, linewidth=1, transp=0, offset=-1 * bar, title="MA21")
+plot(show_ma55 ? ma55 : na, color=ma55_col, linewidth=1, transp=0, offset=-1 * bar, title="MA55")
+plot(show_ma200 ? ma200 : na, color=ma200_col, linewidth=1, transp=0, offset=-1 * bar, title="MA200")
+
+plot(show_ma5 ? ma5_forecast1 : na, color=ma5_col, linewidth=2, style=plot.style_circles, title="MA5 Forecast 1", offset=1 - bar, show_last=1)
+plot(show_ma5 ? ma5_forecast2 : na, color=ma5_col, linewidth=2, style=plot.style_circles, title="MA5 Forecast 2", offset=2 - bar, show_last=1)
+plot(show_ma5 ? ma5_forecast3 : na, color=ma5_col, linewidth=2, style=plot.style_circles, title="MA5 Forecast 3", offset=3 - bar, show_last=1)
+
+plot(show_ma13 ? ma13_forecast1 : na, color=ma13_col, linewidth=2, style=plot.style_circles, title="MA13 Forecast 1", offset=1 - bar, show_last=1)
+plot(show_ma13 ? ma13_forecast2 : na, color=ma13_col, linewidth=2, style=plot.style_circles, title="MA13 Forecast 2", offset=2 - bar, show_last=1)
+plot(show_ma13 ? ma13_forecast3 : na, color=ma13_col, linewidth=2, style=plot.style_circles, title="MA13 Forecast 3", offset=3 - bar, show_last=1)
+
+plot(show_ma21 ? ma21_forecast1 : na, color=ma21_col, linewidth=2, style=plot.style_circles, title="MA21 Forecast 1", offset=1 - bar, show_last=1)
+plot(show_ma21 ? ma21_forecast2 : na, color=ma21_col, linewidth=2, style=plot.style_circles, title="MA21 Forecast 2", offset=2 - bar, show_last=1)
+plot(show_ma21 ? ma21_forecast3 : na, color=ma21_col, linewidth=2, style=plot.style_circles, title="MA21 Forecast 3", offset=3 - bar, show_last=1)
+
+plot(show_ma55 ? ma55_forecast1 : na, color=ma55_col, linewidth=2, style=plot.style_circles, title="MA55 Forecast 1", offset=1 - bar, show_last=1)
+plot(show_ma55 ? ma55_forecast2 : na, color=ma55_col, linewidth=2, style=plot.style_circles, title="MA55 Forecast 2", offset=2 - bar, show_last=1)
+plot(show_ma55 ? ma55_forecast3 : na, color=ma55_col, linewidth=2, style=plot.style_circles, title="MA55 Forecast 3", offset=3 - bar, show_last=1)
+
+plot(show_ma200 ? ma200_forecast1 : na, color=ma200_col, linewidth=2, style=plot.style_circles, title="MA200 Forecast 1", offset=1 - bar, show_last=1)
+plot(show_ma200 ? ma200_forecast2 : na, color=ma200_col, linewidth=2, style=plot.style_circles, title="MA200 Forecast 2", offset=2 - bar, show_last=1)
+plot(show_ma200 ? ma200_forecast3 : na, color=ma200_col, linewidth=2, style=plot.style_circles, title="MA200 Forecast 3", offset=3 - bar, show_last=1)
+
+// ********************************************
+// *** Strategy Long/Short Call Calculation ***
+// ********************************************
+longEntry = bool(na)
+shortEntry = bool(na)
+inLongPosition = bool(na)
+inShortPosition = bool(na)
+flat = bool(na)
+inLongPosition := longEntry[1] ? true : shortEntry[1] ? false : inLongPosition[1]
+inShortPosition := shortEntry[1] ? true : longEntry[1] ? false : inShortPosition[1]
+flat := not inLongPosition and not inShortPosition
+
+longEntry := rsi2 < 5 and k < 10
+shortEntry := rsi2 > 95 and k > 90
+
+//longEntry := crossover(ma5_forecast3, ma21_forecast3) // and ma5 
+//shortEntry := crossunder(ma5_forecast3, ma21_forecast3)
+
+//longEntry := close > ma200 and rsi2 <= 5 and rsi14 <= 20
+//shortEntry := close < ma200 and rsi2 >= 95 and rsi14 >= 80
+
+//*****  STUDY START *****//
+//Variables declaration
+isLongOpen = false
+isShortOpen = false
+stopLossPercent = input(2, "Stop Loss Percent", step=0.5)
+takeProfitPercent = input(10, "Profit Percent", step=0.5)
+trailStopPercent = input(3.5, "Trailing Stop Percent", step=0.5)
+
+//Order open on previous ticker?
+isLongOpen := nz(isLongOpen[1])
+isShortOpen := nz(isShortOpen[1])
+
+//Trailing and Profit variables
+stopTrigger = 0.0
+stopTrigger := na
+profitTrigger = 0.0
+profitTrigger := na
+trailTrigger = 0.0
+trailTrigger := na
+
+//obtain values from last ticker
+entryPrice = 0.0
+entryPrice := nz(entryPrice[1])
+stopLossLevel = 0.0
+stopLossLevel := nz(stopLossLevel[1])
+profitPriceLevel = 0.0
+profitPriceLevel := nz(profitPriceLevel[1])
+trailPriceLevel = 0.0
+trailPriceLevel := nz(trailPriceLevel[1])
+
+//If in active trade, lets load with current value    
+if isLongOpen
+    profitTrigger := profitPriceLevel ? high : na
+    trailTrigger := trailPriceLevel ? high : na
+    stopTrigger := stopLossLevel ? low : na  //was ohlc4 changed to low
+    stopTrigger
+if isShortOpen
+    profitTrigger := profitPriceLevel ? low : na
+    trailTrigger := trailPriceLevel ? low : na
+    stopTrigger := stopLossLevel ? high : na  //was ohlc4 changed to high
+    stopTrigger
+
+isStopLoss = isLongOpen ? stopTrigger < stopLossLevel : 
+   isShortOpen ? stopTrigger > stopLossLevel : na
+isProfitCatch = isLongOpen ? profitTrigger > profitPriceLevel : 
+   isShortOpen ? profitTrigger < profitPriceLevel : na
+isTrailStop = isLongOpen ? trailTrigger > trailPriceLevel : 
+   isShortOpen ? trailTrigger < trailPriceLevel : na
+
+//Upon Entry, do this.
+if longEntry and not inLongPosition or shortEntry and not inShortPosition
+    entryPrice := close  //was ohlc4 changed to close
+    entryPrice
+
+//set price points for new orders
+if longEntry
+    stopLossLevel := (1 - 0.01 * stopLossPercent) * entryPrice
+    profitPriceLevel := (1 + 0.01 * takeProfitPercent) * entryPrice
+    trailPriceLevel := (1 + 0.01 * trailStopPercent) * entryPrice
+    trailPriceLevel
+if shortEntry
+    stopLossLevel := (1 + 0.01 * stopLossPercent) * entryPrice
+    profitPriceLevel := (1 - 0.01 * takeProfitPercent) * entryPrice
+    trailPriceLevel := (1 - 0.01 * trailStopPercent) * entryPrice
+    trailPriceLevel
+
+//Just some high/low marker for info
+highest = 0.0
+highest := high > highest[1] and entryPrice ? high : nz(highest[1])
+
+lowest = 0.0
+lowest := (low < lowest[1] or lowest[1] == 0.0) and entryPrice ? low : nz(lowest[1])
+
+shortExit = isShortOpen[1] and (isStopLoss or isProfitCatch or isTrailStop or longEntry)
+longExit = isLongOpen[1] and (isStopLoss or isProfitCatch or isTrailStop or shortEntry)
+
+if (longExit or shortExit) and not(longEntry or shortEntry)
+    stopTrigger := na
+    profitTrigger := na
+    trailTrigger := na
+    entryPrice := na
+    stopLossLevel := na
+    profitPriceLevel := na
+    trailPriceLevel := na
+    highest := na
+    lowest := na
+    inLongPosition := na
+    inShortPosition := na
+    inShortPosition
+
+//If the value changed to invoke a buy, lets set it before we leave
+isLongOpen := longEntry ? true : longExit == true ? false : isLongOpen
+isShortOpen := shortEntry ? true : shortExit == true ? false : isShortOpen
+
+plotshape(longEntry and (inShortPosition or flat), style=shape.triangleup, size=size.tiny, color=color.lime, location=location.belowbar)
+plotshape(shortEntry and (inLongPosition or flat), style=shape.triangledown, size=size.tiny, color=color.red, location=location.abovebar)
+
+plotchar(showPosition ? entryPrice ? entryPrice : na : na, title="Entry Level", color=color.white, char="-", location=location.absolute)
+plotchar(showPosition ? stopLossLevel ? stopLossLevel : na : na, title="Stop Loss Level", color=color.red, char="-", location=location.absolute)
+plotchar(showPosition ? profitPriceLevel ? profitPriceLevel : na : na, title="Profit Level", color=color.lime, char="-", location=location.absolute)
+plotchar(showPosition ? trailPriceLevel ? trailPriceLevel : na : na, title="Trail Stop Level", color=color.aqua, char="-", location=location.absolute)
+
+//plotshape(profitTrigger[1] ? isProfitCatch : na, title="Profit Exit Triggered", style=shape.circle, location=location.top, color=lime, transp=25, size=size.small)
+//plotshape(showPosition ? inLongPosition[1] and trailTrigger[1] ? isTrailStop : na : na, title="Trail Stop Exit Triggered", style=shape.circle, location=location.abovebar, color=color.aqua, transp=25, size=size.tiny)
+//plotshape(showPosition ? inShortPosition[1] and trailTrigger[1] ? isTrailStop : na : na, title="Trail Stop Exit Triggered", style=shape.circle, location=location.belowbar, color=color.aqua, transp=25, size=size.tiny)
+//plotshape(showPosition ? inLongPosition[1] and stopTrigger[1] ? isStopLoss : na : na, title="Stop Loss Triggered", style=shape.circle, location=location.belowbar, color=color.red, transp=25, size=size.tiny)
+//plotshape(showPosition ? inShortPosition[1] and stopTrigger[1] ? isStopLoss : na : na, title="Stop Loss Triggered", style=shape.circle, location=location.abovebar, color=color.red, transp=25, size=size.tiny)
+//*****  STUDY END *****//
+
+//*****  ALERTS START *****// 
+alertcondition(longEntry or shortEntry, title="Long/Short Triggered", message="L/S")
+alertcondition(longEntry, title="Buy", message="Long")
+alertcondition(shortEntry, title="Sell", message="Sell")
+alertcondition(isStopLoss, title="Stop Loss", message="Stop Loss")
+alertcondition(isTrailStop and inLongPosition, title="Trail Stop Long", message="Trail Stop Long")
+alertcondition(isTrailStop and inShortPosition, title="Trail Stop Short", message="Trail Stop Short")
+//*****  ALERTS END *****// 

@@ -1,0 +1,22 @@
+//@version=3
+study("[HC] RSI(OBV)")
+
+src = close
+cciP = input(20, title="CCI Period Length")
+rsiP = input(20, title="RSI Period Length")
+cciThreshold = input(0, title="CCI threshold for color coding")
+emaLength = input(13, title="EMA Length/RSI_OBV")
+
+obv = cum(change(src) > 0 ? volume : change(src) < 0 ? -volume : 0*volume)
+c = cci(src, cciP)
+rsiobv = na
+rsiobv := rsi(obv, rsiP)
+
+h70 = hline(70, color=red, linestyle=dotted, linewidth=1)
+h60 = hline(60, color=white, linestyle=dotted, linewidth=1)
+h40 = hline(40, color=white, linestyle=dotted, linewidth=1)
+h30 = hline(30, color=green, linestyle=dotted, linewidth=1)
+plot(rsiobv, color=c>=cciThreshold?lime:red, title="RSIa", transp=1, linewidth=1)
+//plot(ema(obv, emaLength), color=orange)
+alertcondition(rsiobv > 70 or rsiobv < 30, title="RSIOBV L/S Trigger", message="RSIOBV_LS")
+
