@@ -1,0 +1,198 @@
+//@version=4
+//Script snipets & inspiration from Chris Moody, Libertus and Sander
+//Triple RSI Indicator with Divergence
+//Edited by Henri Cormier
+study(title="[HC] Tripple RSI & Divergence v3", shorttitle="[HC] 3 RSI & DIV v3", overlay=false)
+src = close
+len2 = input(2, minval=1, title="RSI Length 2")
+len5 = input(7, minval=1, title="RSI Length 7")
+len14 = input(14, minval=1, title="RSI Length 14")
+rsi2 = rsi(close, len2)
+rsi5 = rsi(close, len5)
+rsi14 = rsi(close, len14)
+cciP = input(20, title="CCI Period Length")
+rsiP = input(20, title="RSI Period Length")
+cciThreshold = input(0, title="CCI threshold for color coding")
+
+//* RSI OBV *//
+change_1 = change(src)
+obv = cum(change(src) > 0 ? volume : change_1 < 0 ? -volume : 0 * volume)
+c = cci(src, cciP)
+rsiobv = float(na)
+rsiobv := rsi(obv, rsiP)
+//plot(rsiobv, color=c >= cciThreshold ? color.lime : color.red, title="RSIa", transp=1, linewidth=1)
+//alertcondition(rsiobv > 70 or rsiobv < 30, title="RSIOBV L/S Trigger", message="RSIOBV_LS")
+
+//* Market God OSC *//
+haopen = security(heikinashi(syminfo.tickerid), timeframe.period, open)
+hahigh = security(heikinashi(syminfo.tickerid), timeframe.period, high)
+halow = security(heikinashi(syminfo.tickerid), timeframe.period, low)
+haclose = security(heikinashi(syminfo.tickerid), timeframe.period, close)
+heikUpColor() =>
+    haclose > haopen
+heikDownColor() =>
+    haclose <= haopen
+price = haclose
+haSrc = haclose
+
+//SRSI 
+smoothK = 3
+smoothD = 3
+lengthRSI = 9
+lengthStoch = 9
+rsi1 = float(na)
+rsi1 := rsi(haSrc, lengthRSI)
+k = float(na)
+k := sma(stoch(rsi1, rsi1, rsi1, lengthStoch), smoothK)
+d = float(na)
+d := sma(k, smoothD)
+
+//DEMA TEMA
+e1 = float(na)
+e1 := ema(haSrc, 9)
+e2 = float(na)
+e2 := ema(e1, 9)
+ema1 = float(na)
+ema1 := ema(haSrc, 9)
+ema2 = float(na)
+ema2 := ema(ema1, 9)
+ema3 = ema(ema2, 9)
+tema = float(na)
+tema := 3 * (ema1 - ema2) + ema3
+dema = float(na)
+dema := 2 * e1 - e2
+avda = float(na)
+avda := avg(dema, tema)
+//plot(d, style=line, linewidth=1, color=white, transp=0)
+
+// Plots 
+ma9 = sma(rsi14, 9)
+ma45 = ema(rsi14, 45)
+//plot(rsi2, title="RSI2", style=line, linewidth=1, color=red, transp=0)
+//plot(rsi5, title="RSI5", style=line, linewidth=1, color=lime, transp=0)
+plot(rsi14, title="RSI14", style=plot.style_line, linewidth=1, color=color.yellow, transp=0)
+plot(ma9, title="RSI SMA 9", style=plot.style_line, linewidth=1, color=color.fuchsia, transp=0)  //Purple
+plot(ma45, title="RSI EMA 45", style=plot.style_line, linewidth=1, color=color.aqua, transp=0)  //Aqua
+
+//* Reverse RSI Panel - START *//
+src_rrsi    = input(close,                            "===== Source =====", input.source)
+len    = input(14,                                       "RSI Length", input.integer, minval=2)
+lenema = input(12,                                   "RSI-EMA Length", input.integer, minval=2)
+ob     = input(80.0,                               "Overbought Input", input.float,minval=0,step=5)
+os     = input(20.0,                                 "Oversold Input", input.float,minval=0,step=5)
+pan    = input(true,                       " Show Information Panel",  input.bool  )
+off    = input(15,                         "??Panel Position Offset",  input.integer, minval=0)
+s      = input(true,                  "Show Entered RSI Price Level",  input.bool  )
+ersi   = input(60.0,                           "??Entered RSI Input",  input.float )
+dec    = input(2,                                          "Decimals", input.integer, minval=0 , maxval = 10)
+
+//Reverse RSI Functions
+reverse(Level) =>
+    x1 = (len - 1) * (rma(max(nz(src_rrsi[1],src_rrsi) - src_rrsi, 0), len) * Level / (100 - Level) - rma(max(src_rrsi - nz(src_rrsi[1],src_rrsi), 0), len))
+    iff(x1 >= 0, src_rrsi + x1, src_rrsi + x1 * (100 - Level) / Level)
+
+//Reverse RSI Price Level Calculations
+revma = reverse(ma45)
+revob = reverse(ob)
+revos = reverse(os)
+reversi = reverse(ersi)
+
+//Information Panel
+labelstyle = label.style_label_center
+labelc = color.new(#000000, 45)
+
+//Round Function
+Round(src_rrsi, digits) => 
+    p = pow(10,digits)
+    round(abs(src_rrsi)*p)/p*sign(src_rrsi)
+
+//Offset 
+xp(offset) => 
+    time + round(change(time) * offset)
+
+lable1(offset,P, T, s, color_PnL) =>
+    label PnL_Label = na
+    PnL_Label := label.new(xp(offset), P, text = T, color=color_PnL, textcolor=color.white, style = s, yloc=yloc.price, xloc=xloc.bar_time,size=size.normal)
+    label.delete(PnL_Label[1])
+
+lable2(offset,P, T, s, color_PnL) =>
+    label PnL_Label = na
+    PnL_Label := label.new(xp(offset), P, text = T, color=color.new(#000000c0,45), textcolor=color.white, style = label.style_label_down, yloc=yloc.price, xloc=xloc.bar_time,size=size.normal)
+    label.delete(PnL_Label[1])
+
+ud()=>
+    if rsi14 < ma45
+        "UP"
+    else
+        "DOWN"
+    
+//Panel Plot
+if (pan)        
+    lable1(off,50, "RSI (" + tostring(Round(ersi,dec)) + ") : " + tostring(Round(reversi,dec)) + "\n OB (" + tostring(Round(ob,dec)) + ") : " + tostring(Round(revob,dec)) +  "\n OS (" + tostring(Round(os,dec)) + ") : " + tostring(Round(revos,dec)),labelstyle,labelc)
+
+//* Reverse RSI Panel - END *//
+
+//* EMA Cross Alerts - START *//
+emaCrossUp = false
+emaCrossUp := crossover(ma9, ma45) //and abs(rsi14 - ema(rsi14, 9)) > 2
+emaCrossDown = false
+emaCrossDown := crossunder(ma9, ma45) //and abs(rsi14 - ema(rsi14, 9)) > 2
+plotshape(emaCrossUp ? emaCrossUp : na, title="ema cross up", color=color.lime, style=shape.diamond, location=location.top)
+plotshape(emaCrossDown ? emaCrossDown : na, title="ema cross down", color=color.red, style=shape.diamond, location=location.top)
+plotshape(rsi14 > rsiobv and rsi14 > sma(rsi14, 9) and sma(rsi14, 9) > sma(rsi14, 45) ? true : na, title="Trend Long", style=shape.circle, location=location.bottom, color=color.lime)
+plotshape(rsi14 < rsiobv and rsi14 < sma(rsi14, 9) and sma(rsi14, 9) < sma(rsi14, 45) ? true : na, title="Trend Short", style=shape.circle, location=location.bottom, color=color.red)
+//* EMA Cross Alerts - END *//
+
+//* RSI Visuals - START *//
+band80 = hline(80, title="RSI80", linestyle=hline.style_dotted, linewidth=1, color=color.red)
+band60 = hline(60, title="RSI60", linestyle=hline.style_dotted, linewidth=1, color=color.green)
+band40 = hline(40, title="RSI40", linestyle=hline.style_dotted, linewidth=1, color=color.red)
+band20 = hline(20, title="RSI20", linestyle=hline.style_dotted, linewidth=1, color=color.green)
+//bgcolor(rsi2 <= 10 ? green : rsi2 >= 90 ? red : black, transp=85)
+bgcolor(rsi5 <= 20 ? color.green : rsi5 >= 80 ? color.red : na, transp=75)
+bgcolor(rsi14 <= 30 ? color.green : rsi14 >= 70 ? color.red : na, transp=65)
+bgcolor(rsi14 <= 20 and d <= 5 ? color.white : rsi14 >= 80 and d >= 95 ? color.white : na, transp=65)
+rsiLong = rsi2 <= 10 and rsi5 <= 20 and rsi14 <= 30
+rsiShort = rsi2 >= 90 and rsi5 >= 80 and rsi14 >= 70
+//* RSI Visuals - END *//
+
+// *** RSI Divergence START ***
+length = input(14)
+
+f_top_fractal(_src) =>
+    _src[4] < _src[2] and _src[3] < _src[2] and _src[2] > _src[1] and 
+       _src[2] > _src[0]
+f_bot_fractal(_src) =>
+    _src[4] > _src[2] and _src[3] > _src[2] and _src[2] < _src[1] and 
+       _src[2] < _src[0]
+f_fractalize(_src) =>
+    f_bot_fractal__1 = f_bot_fractal(_src)
+    f_top_fractal(_src) ? 1 : f_bot_fractal__1 ? -1 : 0
+
+rsi_high = rsi(high, length)
+rsi_low = rsi(low, length)
+fractal_top_rsi = f_fractalize(rsi_high) > 0 ? rsi_high[2] : na
+fractal_bot_rsi = f_fractalize(rsi_low) < 0 ? rsi_low[2] : na
+
+rsi_high_prev = valuewhen(fractal_top_rsi, rsi_high[2], 1)
+rsi_high_price = valuewhen(fractal_top_rsi, high[2], 1)
+rsi_low_prev = valuewhen(fractal_bot_rsi, rsi_low[2], 1)
+rsi_low_price = valuewhen(fractal_bot_rsi, low[2], 1)
+
+regular_bearish_div = fractal_top_rsi and high[2] > rsi_high_price and rsi_high[2] < rsi_high_prev
+hidden_bearish_div = fractal_top_rsi and high[2] < rsi_high_price and rsi_high[2] > rsi_high_prev
+regular_bullish_div = fractal_bot_rsi and low[2] < rsi_low_price and rsi_low[2] > rsi_low_prev
+hidden_bullish_div = fractal_bot_rsi and low[2] > rsi_low_price and rsi_low[2] < rsi_low_prev
+
+plotshape(title='+RBD', series=regular_bearish_div ? rsi_high[2] : na, text='R\n▼', style=shape.labeldown, location=location.absolute, color=color.maroon, textcolor=color.white, offset=-2)
+plotshape(title='+HBD', series=hidden_bearish_div ? rsi_high[2] : na, text='H\n▼', style=shape.labeldown, location=location.absolute, color=color.maroon, textcolor=color.white, offset=-2)
+plotshape(title='-RBD', series=regular_bullish_div ? rsi_low[2] : na, text='▲\nR', style=shape.labelup, location=location.absolute, color=color.green, textcolor=color.white, offset=-2)
+plotshape(title='-HBD', series=hidden_bullish_div ? rsi_low[2] : na, text='▲\nH', style=shape.labelup, location=location.absolute, color=color.green, textcolor=color.white, offset=-2)
+// *** RSI Divergence END ***
+
+//*****  ALERTS START *****// 
+alertcondition(regular_bullish_div or hidden_bullish_div, title="RSI Bull Div", message="RSI Bull Div")
+alertcondition(regular_bearish_div or hidden_bearish_div, title="RSI Bear Div", message="RSI Bear Div")
+alertcondition(rsiLong, title="RSI Long", message="RSI Long")
+alertcondition(rsiShort, title="RSI Short", message="RSI Short")
+//*****  ALERTS END *****// 
